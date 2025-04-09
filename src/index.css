@@ -1,0 +1,92 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 215 30% 12%;
+    --foreground: 210 40% 98%;
+
+    --card: 217 33% 17%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 217 33% 17%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 196 80% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 217 33% 23%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 21%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 196 80% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 20%;
+    --input: 217 33% 22%;
+    --ring: 196 80% 42%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 196 80% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 25% 18%;
+    --sidebar-accent-foreground: 210 40% 95%;
+    --sidebar-border: 215 25% 18%;
+    --sidebar-ring: 196 80% 42%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-cyber-dark text-foreground;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-cyber-darker;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-cyber-lightgray rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-cyber-accent;
+}
+
+/* Network Graph */
+.network-node {
+  @apply fill-cyber-accent stroke-white stroke-1;
+}
+
+.network-node.compromised {
+  @apply fill-cyber-danger;
+}
+
+.network-edge {
+  @apply stroke-cyber-lightgray stroke-1;
+}
+
+.network-edge.active {
+  @apply stroke-cyber-accent stroke-2 animate-pulse-slow;
+}
