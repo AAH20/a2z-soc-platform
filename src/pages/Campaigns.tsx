@@ -1,5 +1,4 @@
 import React from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CircleDollarSign, UserRoundCheck, ShieldAlert, Bug } from 'lucide-react';
@@ -117,7 +116,6 @@ const CampaignsPage: React.FC = () => {
   const [date, setDate] = React.useState<Date | undefined>(new Date())
 
   return (
-    <MainLayout>
       <div className="container mx-auto py-10">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Campaigns</h1>
@@ -287,7 +285,6 @@ const CampaignsPage: React.FC = () => {
           </Card>
         </div>
       </div>
-    </MainLayout>
   );
 };
 

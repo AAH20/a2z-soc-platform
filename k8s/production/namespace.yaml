@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: a2z-soc-production
+  labels:
+    name: a2z-soc-production
+    environment: production
+    tier: production
+    app.kubernetes.io/name: a2z-soc
+    app.kubernetes.io/instance: production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: platform
+    app.kubernetes.io/part-of: a2z-soc-platform
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "A2Z SOC Production SaaS Platform"
+    contact: "platform-team@a2zsoc.com"
+    monitoring.prometheus.io/scrape: "true"
+    network.policy/enable: "true"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: a2z-soc-production-quota
+  namespace: a2z-soc-production
+spec:
+  hard:
+    requests.cpu: "200"
+    requests.memory: 400Gi
+    limits.cpu: "500"
+    limits.memory: 1000Gi
+    persistentvolumeclaims: "50"
+    pods: "1000"
+    services: "100"
+    secrets: "200"
+    configmaps: "200"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: a2z-soc-production-limits
+  namespace: a2z-soc-production
+spec:
+  limits:
+  - default:
+      cpu: "2"
+      memory: "4Gi"
+    defaultRequest:
+      cpu: "500m"
+      memory: "1Gi"
+    type: Container
+  - default:
+      storage: "10Gi"
+    type: PersistentVolumeClaim 

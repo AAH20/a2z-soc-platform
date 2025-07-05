@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  a2z-soc:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: a2z-soc:cross-platform
+    container_name: a2z-soc-unified
+    restart: unless-stopped
+    ports:
+      - "5173:5173"     # Frontend (React dev server - main access point)
+      - "3001:3001"     # API Server (direct access)
+      - "5200:5200"     # Network Agent (monitoring interface)
+      - "5432:5432"     # PostgreSQL (database access)
+      - "6379:6379"     # Redis (cache access)
+    privileged: true
+    cap_add:
+      - NET_ADMIN       # Network administration (required for packet capture)
+      - NET_RAW         # Raw socket access (required for network monitoring)
+      - SYS_NICE        # Process priority management
+      - SYS_PTRACE      # Process tracing capabilities
+    volumes:
+      # Database persistent storage
+      - postgres_data:/var/lib/postgresql/data
+      - redis_data:/var/lib/redis
+      - clickhouse_data:/var/lib/clickhouse
+      - elasticsearch_data:/var/lib/elasticsearch
+      # Application data and logs
+      - supervisor_logs:/var/log/supervisor
+      - app_logs:/app/logs
+      - pcap_data:/app/pcap
+      - rules_data:/app/rules
+    environment:
+      - NODE_ENV=development
+      - TZ=UTC
+      - A2Z_INTERFACE=any
+      - A2Z_MODE=active
+      - A2Z_CROSS_PLATFORM=true
+      # Cross-platform compatibility flags
+      - PLATFORM=docker
+      - DOCKER_BUILDKIT=1
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 15s
+      start_period: 120s
+      retries: 3
+    # Resource limits for cross-platform performance
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    # Platform specification (uncomment for specific architectures)
+    # platform: linux/amd64    # Intel/AMD x86_64 (Windows/Linux default)
+    # platform: linux/arm64    # ARM64 (Apple Silicon Macs, ARM servers)
+
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+  clickhouse_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/clickhouse
+  elasticsearch_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/elasticsearch
+  supervisor_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/supervisor
+  app_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/app
+  pcap_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/pcap
+  rules_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/rules
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1 

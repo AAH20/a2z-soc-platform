@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import {
   Card,
   CardContent,
@@ -36,7 +35,6 @@ const AwsThreatIntel: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
 
   return (
-    <MainLayout>
       <div className="flex flex-col space-y-4">
         <div className="flex items-center gap-2">
           <Cloud className="h-6 w-6 text-cyber-accent" />
@@ -522,7 +520,6 @@ const AwsThreatIntel: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>
   );
 };
 

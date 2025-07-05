@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -7,8 +6,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { CircleDollarSign, ShieldCheck, UserCheck } from 'lucide-react';
+import { CircleDollarSign, ShieldCheck, UserCheck, Wifi, Shield, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import CustomProgress from '@/components/ui/custom-progress';
+import { agentStatusService, type AgentInfo } from '../../services/agentStatus';
 
 interface AgentStatusCardProps {
   totalAgents: number;
@@ -23,9 +23,57 @@ const AgentStatusCard: React.FC<AgentStatusCardProps> = ({
   protectedAgents,
   vulnerableAgents,
 }) => {
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Subscribe to agent status updates
+  useEffect(() => {
+    const unsubscribe = agentStatusService.subscribe((updatedAgents) => {
+      setAgents(updatedAgents);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await agentStatusService.checkAllAgentStatuses();
+    setTimeout(() => setIsRefreshing(false), 1000);
+  };
+
+  const onlineAgents = agents.filter(agent => agent.status === 'online');
+  const offlineAgents = agents.filter(agent => agent.status === 'offline');
+
   const activePercentage = (activeAgents / totalAgents) * 100;
   const protectedPercentage = (protectedAgents / totalAgents) * 100;
   const vulnerablePercentage = (vulnerableAgents / totalAgents) * 100;
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'online':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'offline':
+        return <AlertTriangle className="w-4 h-4 text-red-500" />;
+      case 'checking':
+        return <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />;
+      default:
+        return <AlertTriangle className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  const getPlatformIcon = (platform: string) => {
+    switch (platform.toLowerCase()) {
+      case 'windows':
+        return '🖥️';
+      case 'darwin':
+      case 'macos':
+        return '🍎';
+      case 'linux':
+        return '🐧';
+      default:
+        return '💻';
+    }
+  };
 
   return (
     <Card className="bg-cyber-gray border-cyber-lightgray">

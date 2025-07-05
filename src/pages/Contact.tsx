@@ -1,12 +1,10 @@
 
-import MainLayout from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Linkedin, Github, ExternalLink, Mail, User, MessageSquare } from "lucide-react";
 
 const Contact = () => {
   return (
-    <MainLayout>
       <div className="container mx-auto py-6 space-y-6">
         <h1 className="text-3xl font-bold text-white mb-6">Contact</h1>
         
@@ -125,7 +123,6 @@ const Contact = () => {
           </Card>
         </div>
       </div>
-    </MainLayout>
   );
 };
 

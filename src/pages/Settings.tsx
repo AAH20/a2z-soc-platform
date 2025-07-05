@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -46,8 +45,7 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <MainLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 bg-slate-900 min-h-screen p-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white">Settings</h1>
           <div className="flex gap-2">
@@ -527,7 +525,6 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>
   );
 };
 

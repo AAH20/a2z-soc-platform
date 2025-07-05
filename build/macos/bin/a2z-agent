@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+
+// A2Z SOC Network Agent - MacOS
+const path = require('path');
+const fs = require('fs');
+
+// Get the directory where this script is located
+const scriptDir = __dirname;
+const agentRoot = path.join(scriptDir, '..');
+const libPath = path.join(agentRoot, 'lib');
+const indexPath = path.join(libPath, 'index.js');
+
+// Check if the main agent file exists
+if (!fs.existsSync(indexPath)) {
+    console.error('❌ Error: Agent library not found at', indexPath);
+    console.error('Please ensure the agent is properly installed.');
+    process.exit(1);
+}
+
+try {
+    // Load and run the main agent
+    require(indexPath);
+} catch (error) {
+    console.error('❌ Error starting agent:', error.message);
+    process.exit(1);
+} 

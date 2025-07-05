@@ -1,0 +1,81 @@
+[package]
+name = "a2z-ids-core"
+version = "1.0.0"
+edition = "2021"
+authors = ["A2Z SOC Team <dev@a2zsoc.com>"]
+description = "A2Z IDS/IPS Core Detection Engine - Network intrusion detection and prevention"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+tokio-stream = "0.1"
+futures-util = "0.3"
+
+# CLI and configuration
+clap = { version = "4.4", features = ["derive"] }
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+
+# Time utilities
+chrono = { version = "0.4", features = ["serde"] }
+
+# Network packet capture and analysis
+pnet = "0.34"
+pnet_datalink = "0.34"
+pnet_packet = "0.34"
+pnet_base = "0.34"
+
+# Cross-platform system information
+sysinfo = "0.30"
+
+# Regular expressions for pattern matching
+regex = "1.10"
+
+# HTTP client for threat intelligence
+reqwest = { version = "0.11", features = ["json"] }
+
+# Database connectivity
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Configuration management
+config = "0.14"
+
+# Metrics and monitoring
+prometheus = "0.13"
+
+# Random number generation
+rand = "0.8"
+
+# Process and signal handling
+signal-hook = "0.3"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS-specific dependencies
+libc = "0.2"
+nix = { version = "0.27", features = ["user", "process", "resource"] }
+core-foundation = "0.9"
+security-framework = "2.9"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Linux-specific dependencies
+netlink-packet-route = "0.17"
+rtnetlink = "0.13"
+
+[[bin]]
+name = "a2z-ids"
+path = "src/main.rs" 
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1 

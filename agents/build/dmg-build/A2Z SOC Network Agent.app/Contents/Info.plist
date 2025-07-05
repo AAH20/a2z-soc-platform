@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>A2Z SOC Network Agent</string>
+    <key>CFBundleExecutable</key>
+    <string>a2z-agent</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.a2zsoc.network-agent</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>A2Z SOC Network Agent</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.2.3</string>
+    <key>CFBundleVersion</key>
+    <string>1.2.3</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>10.14</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSBackgroundOnly</key>
+    <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>A2Z SOC Network Agent needs to monitor system events for security analysis.</string>
+    <key>NSSystemAdministrationUsageDescription</key>
+    <string>A2Z SOC Network Agent requires administrative access to monitor network traffic and system logs.</string>
+</dict>
+</plist>

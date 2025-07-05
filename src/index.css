@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -52,7 +51,7 @@
   }
 
   body {
-    @apply bg-cyber-dark text-foreground;
+    @apply bg-background text-foreground;
   }
 }
 
@@ -63,30 +62,30 @@
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-cyber-darker;
+  @apply bg-slate-800;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-cyber-lightgray rounded-full;
+  @apply bg-slate-600 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-cyber-accent;
+  @apply bg-blue-500;
 }
 
 /* Network Graph */
 .network-node {
-  @apply fill-cyber-accent stroke-white stroke-1;
+  @apply fill-blue-500 stroke-white stroke-1;
 }
 
 .network-node.compromised {
-  @apply fill-cyber-danger;
+  @apply fill-red-500;
 }
 
 .network-edge {
-  @apply stroke-cyber-lightgray stroke-1;
+  @apply stroke-slate-400 stroke-1;
 }
 
 .network-edge.active {
-  @apply stroke-cyber-accent stroke-2 animate-pulse-slow;
+  @apply stroke-blue-500 stroke-2;
 }

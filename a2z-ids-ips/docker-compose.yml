@@ -1,0 +1,291 @@
+version: '3.8'
+
+services:
+  # A2Z IDS/IPS Core Engine
+  a2z-ids-core:
+    build:
+      context: ./core-engine
+      dockerfile: Dockerfile
+    container_name: a2z-ids-core
+    privileged: true
+    network_mode: host
+    environment:
+      - A2Z_IDS_MODE=development
+      - A2Z_IDS_CONFIG=/etc/a2z-ids/config.yaml
+      - A2Z_IDS_LOG_LEVEL=info
+      - A2Z_IDS_REDIS_URL=redis://localhost:6379
+      - A2Z_IDS_CLICKHOUSE_URL=http://localhost:8123
+    volumes:
+      - ./config:/etc/a2z-ids:ro
+      - ./rules:/var/lib/a2z-ids/rules:ro
+      - ./models:/var/lib/a2z-ids/models:ro
+      - a2z-ids-logs:/var/log/a2z-ids
+      - a2z-ids-pcap:/var/lib/a2z-ids/pcap
+    depends_on:
+      - redis
+      - clickhouse
+      - management-api
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=false"
+
+  # Management API (Go)
+  management-api:
+    build:
+      context: ./management-api
+      dockerfile: Dockerfile
+    container_name: a2z-ids-api
+    environment:
+      - PORT=8080
+      - GIN_MODE=release
+      - A2Z_IDS_REDIS_URL=redis://redis:6379
+      - A2Z_IDS_CLICKHOUSE_URL=http://clickhouse:8123
+      - A2Z_IDS_POSTGRES_URL=postgres://a2z_ids:secure_password@postgres:5432/a2z_ids
+      - A2Z_IDS_JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - A2Z_IDS_CORE_ENDPOINT=http://localhost:9090
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+      - clickhouse
+      - postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.a2z-ids-api.rule=Host(`api.a2z-ids.local`)"
+      - "traefik.http.services.a2z-ids-api.loadbalancer.server.port=8080"
+
+  # Management Web Interface (React)
+  web-interface:
+    build:
+      context: ./web-interface
+      dockerfile: Dockerfile
+    container_name: a2z-ids-web
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080/api/v1
+      - REACT_APP_WEBSOCKET_URL=ws://localhost:8080/ws
+      - REACT_APP_VERSION=1.0.0
+      - REACT_APP_ENVIRONMENT=development
+    ports:
+      - "3000:80"
+    depends_on:
+      - management-api
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.a2z-ids-web.rule=Host(`a2z-ids.local`)"
+      - "traefik.http.services.a2z-ids-web.loadbalancer.server.port=80"
+
+  # Alert Processor (Go)
+  alert-processor:
+    build:
+      context: ./alert-processor
+      dockerfile: Dockerfile
+    container_name: a2z-ids-alerts
+    environment:
+      - A2Z_IDS_REDIS_URL=redis://redis:6379
+      - A2Z_IDS_CLICKHOUSE_URL=http://clickhouse:8123
+      - A2Z_IDS_WEBHOOK_ENDPOINTS=http://localhost:3001/api/v1/alerts/webhook
+      - A2Z_IDS_CORRELATION_ENABLED=true
+      - A2Z_IDS_ML_ENABLED=true
+    depends_on:
+      - redis
+      - clickhouse
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=false"
+
+  # Machine Learning Engine (Python)
+  ml-engine:
+    build:
+      context: ./ml-engine
+      dockerfile: Dockerfile
+    container_name: a2z-ids-ml
+    environment:
+      - PYTHON_ENV=development
+      - A2Z_IDS_REDIS_URL=redis://redis:6379
+      - A2Z_IDS_CLICKHOUSE_URL=http://clickhouse:8123
+      - A2Z_IDS_MODEL_PATH=/var/lib/a2z-ids/models
+      - CUDA_VISIBLE_DEVICES=0  # Set to -1 to disable GPU
+    volumes:
+      - ./models:/var/lib/a2z-ids/models
+      - a2z-ids-ml-cache:/var/cache/a2z-ids-ml
+    depends_on:
+      - redis
+      - clickhouse
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
+        limits:
+          memory: 4G
+    labels:
+      - "traefik.enable=false"
+
+  # Database Services
+  postgres:
+    image: postgres:15-alpine
+    container_name: a2z-ids-postgres
+    environment:
+      - POSTGRES_DB=a2z_ids
+      - POSTGRES_USER=a2z_ids
+      - POSTGRES_PASSWORD=secure_password
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a2z_ids -d a2z_ids"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ClickHouse for time-series data
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.12-alpine
+    container_name: a2z-ids-clickhouse
+    environment:
+      - CLICKHOUSE_DB=a2z_ids
+      - CLICKHOUSE_USER=a2z_ids
+      - CLICKHOUSE_PASSWORD=secure_password
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/config.xml:/etc/clickhouse-server/config.xml:ro
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.xml:ro
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # Redis for caching and message queuing
+  redis:
+    image: redis:7-alpine
+    container_name: a2z-ids-redis
+    command: redis-server --appendonly yes --requirepass secure_redis_password
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring Services
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: a2z-ids-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.a2z-ids.local`)"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: a2z-ids-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - clickhouse
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.a2z-ids.local`)"
+
+  # Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: a2z-ids-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8888:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  # Testing and Development Tools
+  pcap-replay:
+    image: alpine:latest
+    container_name: a2z-ids-pcap-replay
+    command: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ./test-data:/test-data:ro
+      - ./scripts:/scripts:ro
+    network_mode: host
+    profiles:
+      - testing
+
+volumes:
+  postgres-data:
+    driver: local
+  clickhouse-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  a2z-ids-logs:
+    driver: local
+  a2z-ids-pcap:
+    driver: local
+  a2z-ids-ml-cache:
+    driver: local
+
+networks:
+  default:
+    name: a2z-ids-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16 

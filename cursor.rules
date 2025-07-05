@@ -1,0 +1,430 @@
+# A2Z SOC Platform - Cursor Rules
+# Comprehensive development guidelines for the AI-powered Security Operations Center
+
+## Project Overview
+The A2Z SOC platform is a production-ready, enterprise-grade cybersecurity solution combining:
+- Multi-language architecture (Rust, Go, Node.js, React/TypeScript)
+- Unified container deployment with Docker
+- Real-time threat detection and network monitoring
+- SaaS platform with multi-tenant architecture
+- Complete SOC functionality with AI-powered analytics
+
+## Technology Stack & Architecture
+
+### Frontend (React/TypeScript)
+- Framework: React 18.3+ with TypeScript 5.5+
+- Build Tool: Vite 5.4+ for development and production builds
+- Styling: TailwindCSS 3.4+ with custom dark theme
+- UI Library: Radix UI primitives + shadcn/ui component system
+- State Management: React Context + Custom hooks (no external state management)
+- Routing: React Router DOM 6.26+ with protected routes
+- Data Fetching: TanStack React Query 5.80+ for server state
+- HTTP Client: Axios 1.9+ for API communication
+- Forms: React Hook Form 7.53+ with Zod validation
+- Charts: Recharts 2.15+ for data visualization
+- Icons: Lucide React 0.462+
+- Animations: Framer Motion 12.16+
+
+### Backend (Node.js/Express)
+- Runtime: Node.js 18+ with Express 4.18+
+- Database: PostgreSQL 15+ (primary), Redis 7+ (cache), ClickHouse (analytics), Elasticsearch 8.10+
+- Authentication: JWT with bcrypt password hashing
+- API Documentation: Swagger/OpenAPI with swagger-ui-express
+- Real-time: Socket.io 4.7+ for WebSocket connections
+- Security: Helmet, CORS, rate limiting, input validation
+- Process Management: PM2 or supervisor for production
+- Logging: Winston with structured logging
+- Testing: Jest with supertest for integration tests
+
+### Security Services (Rust/Go)
+- IDS/IPS Core: Rust 1.74+ with Tokio async runtime
+- Management API: Go 1.21+ with Gin framework
+- Network Agents: Node.js with native packet capture
+- Container Runtime: Docker with privileged network access
+
+### Infrastructure & DevOps
+- Containerization: Docker with multi-stage builds
+- Orchestration: Docker Compose for development, Kubernetes for production
+- Deployment: Unified container with supervisor process management
+- Monitoring: Prometheus + Grafana for metrics
+- CI/CD: GitHub Actions for automated builds and deployments
+
+## File Structure & Organization
+
+```
+a2z-soc-main/
+├── src/                          # React frontend application
+│   ├── components/              # Reusable UI components
+│   │   ├── ui/                 # shadcn/ui components
+│   │   ├── auth/               # Authentication components
+│   │   ├── layout/             # Layout components (MainLayout, Sidebar)
+│   │   ├── dashboard/          # Dashboard-specific components
+│   │   ├── network-agent/      # Network monitoring components
+│   │   ├── threat-intel/       # Threat intelligence components
+│   │   └── ai/                 # AI/ML interface components
+│   ├── pages/                  # Route-level page components
+│   │   ├── Auth/              # Authentication pages
+│   │   └── *.tsx              # Individual page components
+│   ├── services/              # API services and utilities
+│   ├── hooks/                 # Custom React hooks
+│   ├── lib/                   # Utility functions and helpers
+│   └── types/                 # TypeScript type definitions
+├── api/                        # Node.js backend API
+│   ├── controllers/           # Route controllers
+│   ├── services/              # Business logic services
+│   ├── routes/                # Express route definitions
+│   ├── middleware/            # Express middleware
+│   └── models/                # Data models and schemas
+├── a2z-ids-ips/               # IDS/IPS standalone system
+│   ├── core-engine/           # Rust core detection engine
+│   ├── management-api/        # Go management API
+│   └── web-interface/         # React web dashboard
+├── agents/                    # Network monitoring agents
+│   └── network-agent/         # Production network agent
+│       ├── src/               # Agent source code
+│       ├── frontend/          # Agent web interface
+│       └── scripts/           # Build and deployment scripts
+├── database/                  # Database schemas and migrations
+└── docker/                    # Docker configuration files
+```
+
+## Code Style & Conventions
+
+### TypeScript/React Guidelines
+- Use functional components with hooks exclusively
+- Prefer TypeScript strict mode with explicit types
+- Use const assertions for immutable data structures
+- Implement proper error boundaries and loading states
+- Follow React best practices for performance (memo, useMemo, useCallback)
+- Use custom hooks for shared stateful logic
+- Implement proper TypeScript interfaces for all API responses
+
+### Component Patterns
+- Use shadcn/ui components as building blocks
+- Implement consistent prop interfaces with TypeScript
+- Use compound component patterns for complex UI elements
+- Maintain consistent naming: PascalCase for components, camelCase for functions
+- Implement proper accessibility attributes (ARIA)
+- Use CSS classes from Tailwind with semantic naming
+
+### API Integration Patterns
+- Create typed service classes for each API domain
+- Use React Query for all server state management
+- Implement proper error handling with user-friendly messages
+- Use axios interceptors for authentication and error handling
+- Implement request/response logging for debugging
+- Cache responses appropriately with React Query
+
+### State Management
+- Use React Context for global state (authentication, theme)
+- Use local component state for UI-specific state
+- Use React Query for server state management
+- Avoid prop drilling with proper component composition
+- Implement proper state normalization for complex data
+
+## Security Guidelines
+
+### Authentication & Authorization
+- Implement JWT-based authentication with refresh tokens
+- Use secure HTTP-only cookies for token storage when possible
+- Implement proper RBAC (Role-Based Access Control)
+- Validate all user inputs on both client and server
+- Use bcrypt for password hashing with appropriate salt rounds
+- Implement session timeout and auto-logout functionality
+
+### Data Protection
+- Sanitize all user inputs to prevent XSS attacks
+- Use parameterized queries to prevent SQL injection
+- Implement proper CORS policies for API endpoints
+- Use HTTPS in production with proper TLS configuration
+- Encrypt sensitive data at rest and in transit
+- Implement proper audit logging for security events
+
+### Network Security
+- Use privileged containers only when necessary for packet capture
+- Implement proper network segmentation in Docker deployments
+- Use least privilege principle for container capabilities
+- Validate all network inputs in IDS/IPS components
+- Implement rate limiting and DDoS protection
+
+## Performance Guidelines
+
+### Frontend Performance
+- Implement code splitting with React.lazy for route-level components
+- Use React.memo for expensive components that re-render frequently
+- Optimize bundle size with proper tree shaking
+- Implement virtual scrolling for large data sets
+- Use proper image optimization and lazy loading
+- Minimize re-renders with proper dependency arrays
+
+### Backend Performance
+- Implement proper database indexing for query optimization
+- Use connection pooling for database connections
+- Implement caching strategies with Redis
+- Use streaming for large data transfers
+- Implement proper pagination for API responses
+- Monitor and optimize API response times
+
+### Real-time Features
+- Use WebSocket connections efficiently with proper reconnection logic
+- Implement proper backpressure handling for real-time data
+- Use server-sent events for one-way real-time updates
+- Implement proper error handling for connection failures
+- Cache real-time data appropriately to reduce server load
+
+## Testing Guidelines
+
+### Frontend Testing
+- Use React Testing Library for component testing
+- Implement integration tests for critical user flows
+- Mock API calls appropriately in tests
+- Test accessibility compliance with automated tools
+- Implement visual regression testing for UI components
+- Test responsive design across different screen sizes
+
+### Backend Testing
+- Use Jest for unit testing with high coverage requirements
+- Implement integration tests for API endpoints
+- Use supertest for HTTP endpoint testing
+- Mock external services and databases in tests
+- Test authentication and authorization flows thoroughly
+- Implement load testing for performance validation
+
+### End-to-End Testing
+- Use Playwright or Cypress for E2E testing
+- Test critical user journeys from login to core features
+- Test real-time features with proper async handling
+- Implement cross-browser testing for compatibility
+- Test mobile responsiveness and touch interactions
+
+## Docker & Deployment
+
+### Container Architecture
+- Use multi-stage Docker builds for optimization
+- Implement proper health checks for all services
+- Use supervisor for process management in unified containers
+- Implement proper logging with structured output
+- Use appropriate base images (Alpine for size, standard for compatibility)
+- Implement proper secret management with environment variables
+
+### Development Environment
+- Use Docker Compose for local development
+- Implement hot reloading for development efficiency
+- Use proper volume mounts for development
+- Implement proper environment variable management
+- Use development-specific configurations
+
+### Production Deployment
+- Implement proper container orchestration with Kubernetes
+- Use horizontal pod autoscaling for load management
+- Implement proper monitoring and alerting
+- Use proper service mesh for microservices communication
+- Implement proper backup and disaster recovery procedures
+
+## API Design Guidelines
+
+### RESTful Principles
+- Use proper HTTP methods (GET, POST, PUT, PATCH, DELETE)
+- Implement consistent URL patterns (/api/v1/resource)
+- Use proper HTTP status codes for responses
+- Implement proper API versioning strategies
+- Use consistent response formats across all endpoints
+- Implement proper error response formats
+
+### Documentation
+- Use OpenAPI/Swagger for API documentation
+- Include examples for all request/response formats
+- Document authentication requirements clearly
+- Include rate limiting information
+- Document all error responses and codes
+- Provide SDK examples for different languages
+
+### Data Formats
+- Use JSON for all API communications
+- Implement proper date/time formatting (ISO 8601)
+- Use consistent naming conventions (camelCase for JSON)
+- Implement proper pagination for list endpoints
+- Use proper filtering and sorting query parameters
+- Implement proper validation for all input data
+
+## Database Guidelines
+
+### Schema Design
+- Use proper normalization for relational data
+- Implement proper indexing for query performance
+- Use appropriate data types for each field
+- Implement proper foreign key constraints
+- Use soft deletes for audit trails
+- Implement proper database migrations
+
+### Query Optimization
+- Use proper query optimization techniques
+- Implement connection pooling for performance
+- Use read replicas for read-heavy workloads
+- Implement proper caching strategies
+- Monitor query performance and optimize bottlenecks
+- Use proper transaction management
+
+## Error Handling & Logging
+
+### Error Handling Patterns
+- Implement proper error boundaries in React
+- Use consistent error response formats
+- Implement proper error recovery mechanisms
+- Log errors with appropriate context information
+- Implement proper user-facing error messages
+- Use error monitoring tools for production tracking
+
+### Logging Standards
+- Use structured logging with JSON format
+- Include proper correlation IDs for request tracking
+- Log at appropriate levels (ERROR, WARN, INFO, DEBUG)
+- Implement log rotation and retention policies
+- Sanitize sensitive data from logs
+- Use centralized logging for production systems
+
+## AI/ML Integration Guidelines
+
+### Model Integration
+- Use proper API abstraction for different AI providers
+- Implement proper error handling for AI service failures
+- Cache AI responses when appropriate
+- Implement proper rate limiting for AI service calls
+- Use proper prompt engineering for consistent results
+- Implement proper model version management
+
+### Data Processing
+- Implement proper data preprocessing for ML models
+- Use appropriate data validation for model inputs
+- Implement proper feature engineering pipelines
+- Use proper data versioning for model training
+- Implement proper model evaluation metrics
+- Use A/B testing for model performance comparison
+
+## Monitoring & Observability
+
+### Application Monitoring
+- Implement proper application performance monitoring
+- Use proper metrics collection with Prometheus
+- Implement proper alerting rules for critical issues
+- Use distributed tracing for complex request flows
+- Monitor business metrics alongside technical metrics
+- Implement proper SLA monitoring and reporting
+
+### Security Monitoring
+- Implement proper security event logging
+- Monitor authentication failures and suspicious activities
+- Use proper intrusion detection systems
+- Implement proper incident response procedures
+- Monitor compliance with security policies
+- Use security scanning tools for vulnerability detection
+
+## Development Workflow
+
+### Git Workflow
+- Use semantic commit messages with conventional commits
+- Implement proper branch protection rules
+- Use feature branches for all development work
+- Implement proper code review processes
+- Use automated testing in CI/CD pipelines
+- Implement proper release management procedures
+
+### Code Quality
+- Use ESLint and Prettier for consistent code formatting
+- Implement proper type checking with TypeScript
+- Use proper dependency management with lock files
+- Implement security scanning for dependencies
+- Use proper code coverage requirements
+- Implement proper documentation standards
+
+## Platform-Specific Guidelines
+
+### Network Agent Development
+- Use Node.js for cross-platform compatibility
+- Implement proper packet capture with native modules
+- Use proper privilege escalation when necessary
+- Implement proper configuration management
+- Use secure communication channels to cloud services
+- Implement proper agent lifecycle management
+
+### IDS/IPS Development
+- Use Rust for high-performance packet processing
+- Implement proper rule engine architecture
+- Use machine learning for anomaly detection
+- Implement proper threat intelligence integration
+- Use proper alert correlation and reduction
+- Implement proper forensic data collection
+
+### SaaS Platform Features
+- Implement proper multi-tenancy with data isolation
+- Use proper subscription management and billing
+- Implement proper customer onboarding flows
+- Use proper usage analytics and reporting
+- Implement proper compliance and audit features
+- Use proper customer support integration
+
+## Common Patterns to Follow
+
+### Authentication Flow
+```typescript
+// Use AuthProvider context for global auth state
+// Implement ProtectedRoute for route-level protection
+// Use JWT tokens with proper refresh logic
+// Implement proper logout and session cleanup
+```
+
+### API Service Pattern
+```typescript
+// Create typed service classes for each domain
+// Use axios interceptors for common functionality
+// Implement proper error handling and retry logic
+// Use React Query for caching and synchronization
+```
+
+### Component Composition
+```typescript
+// Use compound components for complex UI elements
+// Implement proper prop interfaces with TypeScript
+// Use composition over inheritance for flexibility
+// Implement proper accessibility attributes
+```
+
+### Data Fetching Pattern
+```typescript
+// Use React Query for all server state
+// Implement proper loading and error states
+// Use optimistic updates for better UX
+// Cache data appropriately based on usage patterns
+```
+
+## Anti-Patterns to Avoid
+
+- Don't use class components (use functional components with hooks)
+- Don't use global state for local UI state
+- Don't ignore TypeScript errors or use 'any' type excessively
+- Don't implement custom state management when React Query suffices
+- Don't ignore accessibility requirements
+- Don't skip proper error handling and loading states
+- Don't use blocking operations in the main thread
+- Don't ignore security best practices for authentication
+- Don't skip proper validation for user inputs
+- Don't implement features without proper testing coverage
+
+## Development Environment Setup
+
+### Required Tools
+- Node.js 18+ with npm 9+
+- Docker Desktop for containerization
+- Git for version control
+- VS Code with recommended extensions
+- PostgreSQL client for database management
+- Redis client for cache management
+
+### Environment Variables
+- Use .env files for development configuration
+- Implement proper secret management for production
+- Use different configurations for different environments
+- Validate all required environment variables at startup
+- Document all environment variables and their purposes
+
+This cursor.rules file should be updated as the project evolves and new patterns emerge. 

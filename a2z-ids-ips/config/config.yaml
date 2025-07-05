@@ -1,0 +1,425 @@
+# A2Z IDS/IPS Configuration File
+# Version: 1.0.0
+
+# System Configuration
+system:
+  name: "A2Z IDS/IPS"
+  version: "1.0.0"
+  environment: "development"  # development, staging, production
+  timezone: "UTC"
+  log_level: "info"  # trace, debug, info, warn, error
+
+# Network Capture Configuration
+capture:
+  # Primary network interface to monitor
+  interface: any
+  
+  # Operation mode: passive, inline, hybrid
+  mode: passive
+  
+  # Buffer settings
+  buffer_size: "256MB"
+  ring_buffer_size: 1024
+  
+  # Performance settings
+  workers: 8  # Number of packet processing workers (auto = CPU cores)
+  batch_size: 64  # Packets to process in each batch
+  
+  # Advanced settings
+  promisc_mode: true
+  snaplen: 65535  # Maximum packet capture length
+  timeout: 1000   # Capture timeout in milliseconds
+  
+  # Packet filtering (BPF syntax)
+  filter: ""  # Empty = capture all traffic
+  
+  # PCAP storage
+  pcap_storage:
+    enabled: true
+    directory: "/var/lib/a2z-ids/pcap"
+    max_size: "10GB"
+    retention_days: 30
+    compression: true
+
+# Detection Engine Configuration
+detection:
+  # Rule files to load
+  rule_files:
+    - "/var/lib/a2z-ids/rules/community.rules"
+    - "/var/lib/a2z-ids/rules/emerging-threats.rules"
+    - "/var/lib/a2z-ids/rules/custom.rules"
+  
+  # Rule categories to enable
+  enabled_categories:
+    - "malware"
+    - "exploit"
+    - "trojan"
+    - "web-application"
+    - "network-scan"
+    - "dos"
+    - "sql-injection"
+    - "xss"
+  
+  # Performance settings
+  pattern_matching:
+    engine: "hyperscan"  # hyperscan, pcre, aho-corasick
+    case_sensitive: false
+    multiline: true
+  
+  # Flow tracking
+  flow_tracking:
+    enabled: true
+    timeout: 300  # Flow timeout in seconds
+    max_flows: 1000000
+    memory_limit: "2GB"
+  
+  # Protocol detection
+  protocol_detection:
+    enabled: true
+    deep_inspection: true
+    max_inspection_depth: 1500  # bytes
+  
+  rules_path: /app/ids/rules
+  models_path: /app/ids/models
+
+# Machine Learning Configuration
+machine_learning:
+  enabled: true
+  
+  # Model configuration
+  models:
+    anomaly_detection:
+      enabled: true
+      model_path: "/var/lib/a2z-ids/models/anomaly_detection.onnx"
+      threshold: 0.95
+      update_interval: 3600  # seconds
+    
+    malware_classification:
+      enabled: true
+      model_path: "/var/lib/a2z-ids/models/malware_classifier.onnx"
+      threshold: 0.90
+    
+    behavioral_analysis:
+      enabled: true
+      model_path: "/var/lib/a2z-ids/models/behavioral_model.onnx"
+      window_size: 300  # seconds
+      threshold: 0.85
+  
+  # Training configuration
+  training:
+    auto_retrain: true
+    retrain_interval: 86400  # seconds (24 hours)
+    min_samples: 10000
+    validation_split: 0.2
+  
+  # Feature extraction
+  features:
+    packet_size: true
+    flow_duration: true
+    bytes_per_second: true
+    packets_per_second: true
+    protocol_distribution: true
+    port_distribution: true
+    time_features: true
+
+# Threat Intelligence Configuration
+threat_intelligence:
+  enabled: true
+  
+  # External sources
+  sources:
+    virustotal:
+      enabled: true
+      api_key: "${VIRUSTOTAL_API_KEY}"
+      rate_limit: 4  # requests per minute
+    
+    misp:
+      enabled: false
+      url: "https://misp.example.com"
+      api_key: "${MISP_API_KEY}"
+      verify_ssl: true
+    
+    otx:
+      enabled: true
+      api_key: "${OTX_API_KEY}"
+      pulse_subscription: true
+  
+  # IOC management
+  ioc_storage:
+    refresh_interval: 3600  # seconds
+    max_age: 86400  # seconds
+    cache_size: 100000
+  
+  # Reputation scoring
+  reputation:
+    enabled: true
+    threshold: 0.7
+    weight_factors:
+      source_reliability: 0.4
+      age: 0.3
+      frequency: 0.3
+
+# Alerting Configuration
+alerting:
+  # Alert thresholds
+  thresholds:
+    critical: 1
+    high: 5
+    medium: 10
+    low: 20
+    info: 50
+  
+  # Rate limiting
+  rate_limiting:
+    enabled: true
+    max_alerts_per_minute: 100
+    burst_threshold: 200
+    cooldown_period: 300  # seconds
+  
+  # Alert correlation
+  correlation:
+    enabled: true
+    time_window: 300  # seconds
+    similarity_threshold: 0.8
+  
+  # Output destinations
+  outputs:
+    - type: "json"
+      file: "/var/log/a2z-soc/alerts.json"
+      format: "json"
+      
+    - type: "syslog"
+      facility: "local0"
+      severity: "info"
+      
+    - type: "webhook"
+      url: "https://soc.example.com/api/v1/alerts"
+      headers:
+        Authorization: "Bearer ${SOC_API_TOKEN}"
+        Content-Type: "application/json"
+      timeout: 30
+      retry_attempts: 3
+    
+    - type: "email"
+      smtp_server: "smtp.example.com"
+      smtp_port: 587
+      username: "${SMTP_USERNAME}"
+      password: "${SMTP_PASSWORD}"
+      from: "a2z-ids@example.com"
+      to: ["security@example.com"]
+      subject_template: "[A2Z IDS/IPS] Alert: {severity} - {signature}"
+
+# Database Configuration
+database:
+  # PostgreSQL for metadata
+  postgres:
+    host: "postgres"
+    port: 5432
+    database: "a2z_ids"
+    username: "a2z_ids"
+    password: "${POSTGRES_PASSWORD}"
+    ssl_mode: "prefer"
+    max_connections: 20
+    connection_timeout: 30
+  
+  # ClickHouse for time-series data
+  clickhouse:
+    host: "clickhouse"
+    port: 8123
+    database: "a2z_ids"
+    username: "a2z_ids"
+    password: "${CLICKHOUSE_PASSWORD}"
+    compression: true
+    max_connections: 10
+  
+  # Redis for caching
+  redis:
+    host: "redis"
+    port: 6379
+    password: "${REDIS_PASSWORD}"
+    database: 0
+    pool_size: 10
+    timeout: 5
+  
+  url: ${DATABASE_URL}
+
+# Performance and Resource Configuration
+performance:
+  # CPU settings
+  cpu:
+    max_threads: 16
+    affinity: []  # CPU cores to bind to (empty = auto)
+    priority: "high"  # low, normal, high, realtime
+  
+  # Memory settings
+  memory:
+    limit: "8GB"
+    packet_pool_size: "512MB"
+    rule_cache_size: "256MB"
+    flow_cache_size: "1GB"
+    garbage_collection: "aggressive"
+  
+  # Disk I/O
+  disk:
+    io_priority: "high"
+    sync_frequency: 30  # seconds
+    compression_level: 6
+  
+  # Network optimization
+  network:
+    receive_buffer_size: "16MB"
+    send_buffer_size: "16MB"
+    tcp_nodelay: true
+    tcp_quickack: true
+
+# Security Configuration
+security:
+  # Authentication
+  authentication:
+    method: "jwt"  # jwt, basic, none
+    jwt_secret: "${JWT_SECRET}"
+    jwt_expiration: 3600  # seconds
+    refresh_token_expiration: 604800  # seconds (7 days)
+  
+  # Authorization
+  authorization:
+    rbac_enabled: true
+    default_role: "operator"
+    admin_users: ["admin"]
+  
+  # API security
+  api_security:
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 60
+      burst: 100
+    
+    cors:
+      enabled: true
+      allowed_origins: ["*"]
+      allowed_methods: ["GET", "POST", "PUT", "DELETE"]
+      allowed_headers: ["*"]
+    
+    tls:
+      enabled: false
+      cert_file: "/etc/ssl/certs/a2z-ids.crt"
+      key_file: "/etc/ssl/private/a2z-ids.key"
+
+# Monitoring and Metrics
+monitoring:
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    port: 9090
+    path: "/metrics"
+    namespace: "a2z_ids"
+  
+  # Health checks
+  health_checks:
+    enabled: true
+    interval: 30  # seconds
+    timeout: 10   # seconds
+    
+    checks:
+      - name: "capture_status"
+        type: "capture"
+      - name: "database_connectivity"
+        type: "database"
+      - name: "rule_engine"
+        type: "detection"
+      - name: "disk_space"
+        type: "system"
+        threshold: 85  # percent
+      - name: "memory_usage"
+        type: "system"
+        threshold: 90  # percent
+  
+  # Logging
+  logging:
+    level: "info"
+    format: "json"
+    output: "file"
+    file: "/var/log/a2z-ids/a2z-ids.log"
+    max_size: "100MB"
+    max_files: 10
+    compress: true
+
+# Integration Configuration
+integration:
+  # A2Z SOC Platform
+  a2z_soc:
+    enabled: false
+    endpoint: "https://soc.example.com/api/v1"
+    api_key: "${A2Z_SOC_API_KEY}"
+    tenant_id: "${A2Z_SOC_TENANT_ID}"
+    sync_interval: 300  # seconds
+    features:
+      alert_forwarding: true
+      rule_synchronization: true
+      threat_intel_sharing: true
+      compliance_reporting: true
+  
+  # External integrations
+  external:
+    splunk:
+      enabled: false
+      url: "https://splunk.example.com:8088"
+      token: "${SPLUNK_HEC_TOKEN}"
+      index: "security"
+    
+    elastic:
+      enabled: false
+      url: "https://elasticsearch.example.com:9200"
+      username: "${ELASTIC_USERNAME}"
+      password: "${ELASTIC_PASSWORD}"
+      index: "a2z-ids"
+    
+    suricata:
+      enabled: false
+      rules_source: "https://rules.emergingthreats.net"
+      update_interval: 86400  # seconds
+
+# Compliance Configuration
+compliance:
+  frameworks:
+    - name: "PCI-DSS"
+      enabled: true
+      version: "4.0"
+      controls: ["1.1", "1.2", "11.4"]
+    
+    - name: "SOX"
+      enabled: false
+      version: "2002"
+      controls: ["404", "302"]
+    
+    - name: "GDPR"
+      enabled: true
+      version: "2018"
+      controls: ["32", "35"]
+  
+  reporting:
+    auto_generate: true
+    schedule: "0 6 * * 1"  # Weekly on Monday at 6 AM
+    formats: ["pdf", "html", "json"]
+    retention_days: 365
+
+# Development and Testing
+development:
+  # Debug settings
+  debug:
+    enabled: false
+    packet_dump: false
+    rule_tracing: false
+    performance_profiling: false
+  
+  # Testing
+  testing:
+    mock_data: false
+    benchmark_mode: false
+    load_test_rules: false
+  
+  # Feature flags
+  features:
+    experimental_ml: false
+    beta_correlation: false
+    new_ui_components: false 

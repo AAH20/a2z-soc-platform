@@ -1,4 +1,3 @@
-
 // AI service for handling model interactions
 
 import { ModelType } from '@/components/ai/ModelInterface';
@@ -39,6 +38,15 @@ export const modelConfigurations = {
     maxTokens: 16000,
     temperature: 0.3,
     status: 'disconnected' as const,
+  },
+  'deepseek': {
+    type: 'deepseek' as ModelType,
+    name: 'DeepSeek Coder',
+    description: 'DeepSeek\'s specialized model for code analysis and security review',
+    endpoint: 'https://api.deepseek.com/v1/chat/completions',
+    maxTokens: 16000,
+    temperature: 0.4,
+    status: 'connected' as const,
   }
 };
 
@@ -99,6 +107,28 @@ export const securityPrompts = {
       prompt: 'Identify potential gaps in current detection capabilities based on recent threat intelligence.',
       description: 'Find blind spots in your security monitoring'
     }
+  ],
+  codeAnalysis: [
+    {
+      title: 'API Security Review',
+      prompt: 'Review the API endpoints for common security vulnerabilities like CSRF, injection attacks, and authorization flaws.',
+      description: 'Find security issues in API implementations'
+    },
+    {
+      title: 'Authentication Mechanism Audit',
+      prompt: 'Analyze the authentication system for potential weaknesses, password storage methods, and session management issues.',
+      description: 'Identify authentication security risks'
+    },
+    {
+      title: 'Dependency Vulnerability Scan',
+      prompt: 'Examine the project dependencies for known vulnerabilities and recommend secure alternatives where needed.',
+      description: 'Find vulnerable dependencies in your codebase'
+    },
+    {
+      title: 'OWASP Top 10 Assessment',
+      prompt: 'Evaluate the codebase against the OWASP Top 10 vulnerabilities and provide specific remediation steps.',
+      description: 'Check code against industry-standard security risks'
+    }
   ]
 };
 
@@ -106,97 +136,52 @@ export const securityPrompts = {
 export const runModelAnalysis = async (modelType: ModelType, prompt: string): Promise<string> => {
   console.log(`Running analysis with ${modelType} using prompt: ${prompt}`);
   
-  // In a real implementation, this would call the appropriate API
-  return new Promise((resolve) => {
-    // Simulate API call delay
-    setTimeout(() => {
-      resolve(generateMockResponse(modelType, prompt));
-    }, 3000);
-  });
+  try {
+    const response = await fetch('/api/ai/analyze', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      },
+      body: JSON.stringify({
+        model: modelType,
+        prompt,
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+
+    const result = await response.json();
+    
+    if (result.success) {
+      return result.data.response;
+    } else {
+      throw new Error(result.error || 'AI analysis failed');
+    }
+  } catch (error) {
+    console.error('AI service error:', error);
+    throw new Error('Failed to generate AI analysis. Please check your connection and try again.');
+  }
 };
 
-// Mock function to save model configuration
+// Real function to save model configuration
 export const saveModelConfiguration = async (config: any): Promise<boolean> => {
   console.log('Saving model configuration:', config);
-  // In a real implementation, this would save to a backend or local storage
-  return Promise.resolve(true);
-};
-
-// Helper function to generate mock responses
-const generateMockResponse = (modelType: ModelType, prompt: string): string => {
-  // Generate different responses based on model and prompt content
-  if (prompt.toLowerCase().includes('health')) {
-    return `## System Health Assessment
-    
-Overall health: 87% (Good)
-
-**Components requiring attention:**
-- Threat Intelligence Feed: Performance degraded (API rate limiting)
-- Elasticsearch Node 3: High CPU utilization (92%)
-
-**Recommendations:**
-1. Implement rate limiting controls for the Threat Intel API
-2. Evaluate resource allocation for Elasticsearch cluster
-3. Consider implementing load balancing for high-traffic services
-
-All other systems operating within normal parameters.`;
-  }
   
-  if (prompt.toLowerCase().includes('threat') || prompt.toLowerCase().includes('attack')) {
-    return `## Threat Pattern Analysis
+  try {
+    const response = await fetch('/api/ai/config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      },
+      body: JSON.stringify(config)
+    });
 
-Identified 3 potential coordinated attack patterns:
-
-**Pattern A: Credential Stuffing**
-- 247 failed authentication attempts across 18 systems
-- Source IP ranges suggest botnet activity
-- Recommend: Implement progressive rate limiting and CAPTCHA
-
-**Pattern B: API Scanning**
-- Unusual API endpoint probing from 5 source IPs
-- Targeting known vulnerabilities in web services
-- Recommend: Review WAF rules and API throttling policies
-
-**Pattern C: Data Exfiltration Attempt**
-- Unusual outbound traffic patterns from Database Server
-- Destination matches known C2 infrastructure
-- HIGH PRIORITY: Isolate affected system for forensic analysis`;
+    const result = await response.json();
+    return result.success;
+  } catch (error) {
+    console.error('Error saving model configuration:', error);
+    return false;
   }
-  
-  if (prompt.toLowerCase().includes('compliance') || prompt.toLowerCase().includes('framework')) {
-    return `## Compliance Assessment
-
-**NIST CSF Compliance: 73%**
-- Identity Management: 65% ⚠️
-- Access Control: 82% ✓
-- Data Protection: 78% ✓
-- Monitoring: 89% ✓
-- Response Planning: 52% ❌
-
-**Critical Gaps:**
-1. Incident response procedures not regularly tested
-2. Multi-factor authentication not enforced on all admin accounts
-3. Data classification policy implementation incomplete
-
-**Recommended Actions:**
-- Schedule quarterly tabletop exercises for IR team
-- Complete MFA rollout for remaining admin accounts (6 identified)
-- Finalize data classification across cloud storage services`;
-  }
-  
-  // Default response
-  return `## Analysis Results
-
-Based on the requested analysis, I've identified several key findings:
-
-1. System performance metrics show optimal operation at 94% efficiency
-2. Alert categorization accuracy has improved by 12% over the past month
-3. Current detection coverage maps to approximately 85% of MITRE ATT&CK framework
-
-**Recommendations:**
-- Consider implementing additional monitoring for the identified gap in credential access techniques
-- Review and update alert thresholds for network traffic analysis
-- Enhance log correlation rules between endpoint and network data sources
-
-Additional context and metrics are available in the full report.`;
 };

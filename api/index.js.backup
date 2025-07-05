@@ -1,0 +1,434 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
+const { Pool } = require('pg');
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const testAuthRoutes = require('./routes/test-auth');
+const adminRoutes = require('./routes/admin');
+const userRoutes = require('./routes/user');
+const auditRoutes = require('./routes/audits');
+const threatIntelRoutes = require('./routes/threatIntelligence');
+// const cloudInfraRoutes = require('./routes/cloudInfra'); // Temporarily disabled
+const integrationRoutes = require('./routes/integrations');
+const aiInsightsRoutes = require('./routes/aiInsights');
+const complianceRoutes = require('./routes/compliance');
+const agentRoutes = require('./routes/agents'); // Multi-tenant agent management
+const networkAgentsRoutes = require('./routes/network-agents'); // Network agents with real data
+const onboardingRoutes = require('./routes/onboarding');
+const idsLogsRoutes = require('./routes/idsLogs');
+const securityEventsRoutes = require('./routes/securityEvents');
+const dashboardRoutes = require('./routes/dashboard');
+const recommendationsRoutes = require('./routes/recommendations');
+const billingRoutes = require('./routes/billing');
+
+// Import middleware
+const { tenantIsolation } = require('./middleware/tenantIsolation');
+
+// Initialize Express app
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Database connection pool
+const dbPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+// Test database connection
+dbPool.on('connect', () => {
+  console.log('✓ Connected to PostgreSQL database');
+});
+
+dbPool.on('error', (err) => {
+  console.error('✗ Database connection error:', err);
+  console.log('📝 Note: Some features may work without database (like logs viewer)');
+});
+
+// ==============================================
+// MIDDLEWARE SETUP
+// ==============================================
+
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'", "https://api.stripe.com"]
+    }
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+
+// Compression middleware
+app.use(compression());
+
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowedOrigins = process.env.CORS_ORIGIN ? 
+      process.env.CORS_ORIGIN.split(',') : 
+      [
+        'http://localhost:3000', 
+        'http://localhost:5173', 
+        'http://localhost:8080',
+        'http://127.0.0.1:8080',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000'
+      ];
+    
+    // Allow requests with no origin (mobile apps, curl requests, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else if (process.env.NODE_ENV === 'development') {
+      // In development, be more permissive
+      console.log(`⚠️  CORS: Allowing non-configured origin in development: ${origin}`);
+      callback(null, true);
+    } else {
+      console.error(`❌ CORS: Blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Tenant-ID']
+};
+
+app.use(cors(corsOptions));
+
+// Request logging
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+} else {
+  app.use(morgan('combined'));
+}
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many requests',
+    message: 'Please try again later'
+  },
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health' || req.path === '/api/health';
+  }
+});
+
+app.use('/api/', limiter);
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Database connection middleware
+app.use((req, res, next) => {
+  req.db = dbPool;
+  next();
+});
+
+// ==============================================
+// HEALTH CHECK ROUTES
+// ==============================================
+
+app.get('/health', async (req, res) => {
+  try {
+    // Check database connection
+    await dbPool.query('SELECT 1');
+    
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      version: require('./package.json').version,
+      uptime: process.uptime(),
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/health', async (req, res) => {
+  try {
+    // Comprehensive health check
+    const healthChecks = {
+      database: false,
+      redis: false,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    };
+
+    // Database check
+    try {
+      await dbPool.query('SELECT 1');
+      healthChecks.database = true;
+    } catch (error) {
+      console.error('Database health check failed:', error.message);
+    }
+
+    // Redis check (if configured)
+    if (process.env.REDIS_URL) {
+      try {
+        // Redis check would go here
+        healthChecks.redis = true;
+      } catch (error) {
+        console.error('Redis health check failed:', error.message);
+      }
+    } else {
+      healthChecks.redis = 'not_configured';
+    }
+
+    const isHealthy = healthChecks.database && 
+      (healthChecks.redis === true || healthChecks.redis === 'not_configured');
+
+    res.status(isHealthy ? 200 : 503).json({
+      status: isHealthy ? 'healthy' : 'degraded',
+      checks: healthChecks
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// ==============================================
+// API ROUTES
+// ==============================================
+
+// Authentication routes (public)
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/test-auth', testAuthRoutes);
+app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/audits', auditRoutes);
+app.use('/api/v1/threat-intelligence', threatIntelRoutes);
+app.use('/api/v1/integrations', integrationRoutes);
+app.use('/api/v1/ai-insights', aiInsightsRoutes);
+app.use('/api/v1/compliance', complianceRoutes);
+app.use('/api/v1/agents', agentRoutes); // Multi-tenant agent management
+app.use('/api/agents', agentRoutes); // Simplified agent access
+app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/ids-logs', idsLogsRoutes);
+app.use('/api/security-events', securityEventsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/security-recommendations', recommendationsRoutes);
+app.use('/api/billing', billingRoutes);
+
+// ==============================================
+// API DOCUMENTATION (Development only)
+// ==============================================
+
+if (process.env.ENABLE_API_DOCS === 'true' && process.env.NODE_ENV !== 'production') {
+  const swaggerJSDoc = require('swagger-jsdoc');
+  const swaggerUi = require('swagger-ui-express');
+
+  const swaggerOptions = {
+    definition: {
+      openapi: '3.0.0',
+      info: {
+        title: 'A2Z SOC API',
+        version: '1.0.0',
+        description: 'AI-Powered Security Operations Center API',
+        contact: {
+          name: 'A2Z SOC Team',
+          email: 'support@a2zsoc.com'
+        }
+      },
+      servers: [
+        {
+          url: `http://localhost:${PORT}/api`,
+          description: 'Development server'
+        }
+      ],
+      components: {
+        securitySchemes: {
+          BearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT'
+          },
+          ApiKeyAuth: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'X-API-Key'
+          }
+        }
+      }
+    },
+    apis: ['./routes/*.js', './controllers/*.js']
+  };
+
+  const swaggerSpec = swaggerJSDoc(swaggerOptions);
+  
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'A2Z SOC API Documentation'
+  }));
+
+  console.log(`📚 API Documentation available at http://localhost:${PORT}/api/docs`);
+}
+
+// ==============================================
+// ERROR HANDLING MIDDLEWARE
+// ==============================================
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.path} not found`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Global error handler
+app.use((error, req, res, next) => {
+  console.error('Global error handler:', error);
+
+  // Handle specific error types
+  if (error.name === 'ValidationError') {
+    return res.status(400).json({
+      error: 'Validation Error',
+      message: error.message,
+      details: error.details
+    });
+  }
+
+  if (error.name === 'UnauthorizedError') {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Invalid or expired token'
+    });
+  }
+
+  if (error.code === '23505') { // PostgreSQL unique violation
+    return res.status(409).json({
+      error: 'Duplicate Entry',
+      message: 'A record with this information already exists'
+    });
+  }
+
+  if (error.code === 'ECONNREFUSED') {
+    return res.status(503).json({
+      error: 'Service Unavailable',
+      message: 'Database connection failed'
+    });
+  }
+
+  // Default error response
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  res.status(error.status || 500).json({
+    error: 'Internal Server Error',
+    message: isDevelopment ? error.message : 'Something went wrong',
+    ...(isDevelopment && { stack: error.stack }),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ==============================================
+// GRACEFUL SHUTDOWN
+// ==============================================
+
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  
+  try {
+    // Close database connections
+    await dbPool.end();
+    console.log('✓ Database connections closed');
+    
+    // Close server
+    process.exit(0);
+  } catch (error) {
+    console.error('✗ Error during shutdown:', error);
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// ==============================================
+// START SERVER
+// ==============================================
+
+const startServer = async () => {
+  let dbConnected = false;
+  
+  try {
+    // Test database connection (non-blocking)
+    await dbPool.query('SELECT NOW()');
+    console.log('✓ Database connection verified');
+    dbConnected = true;
+  } catch (error) {
+    console.log('⚠️  Database connection failed - running with limited functionality');
+    console.log('📝 Note: IDS Logs and other mock services will still work');
+  }
+
+  // Start server regardless of database status
+  app.listen(PORT, () => {
+    console.log('\n🚀 A2Z SOC API Server Started Successfully!');
+    console.log('==========================================');
+    console.log(`🌐 Server running on: http://localhost:${PORT}`);
+    console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+    console.log(`🔐 API base URL: http://localhost:${PORT}/api`);
+    console.log(`📊 IDS Logs API: http://localhost:${PORT}/api/ids-logs`);
+    console.log(`📖 Environment: ${process.env.NODE_ENV}`);
+    console.log(`💾 Database: ${dbConnected ? '✓ Connected' : '✗ Disconnected (using mock data)'}`);
+    
+    if (process.env.ENABLE_API_DOCS === 'true' && process.env.NODE_ENV !== 'production') {
+      console.log(`📚 API Docs: http://localhost:${PORT}/api/docs`);
+    }
+    
+    console.log('==========================================\n');
+    console.log('🎯 Ready for SOC operations!');
+    console.log('💡 Available features:');
+    console.log('   • IDS/IPS Log Monitoring (Real-time)');
+    console.log('   • Security Event Analytics');
+    console.log('   • Log Export & Filtering');
+    if (dbConnected) {
+      console.log('   • Full multi-tenant functionality');
+      console.log('   • User authentication & management');
+    } else {
+      console.log('   • Limited to mock data and logs');
+      console.log('   • Start PostgreSQL for full features');
+    }
+    console.log('');
+  });
+};
+
+// Start the server
+startServer(); 
