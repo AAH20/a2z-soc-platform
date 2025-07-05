@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# A2Z SOC Network Agent Launcher
+BUNDLE_DIR="$(dirname "$(dirname "$0")")"
+AGENT_PATH="$BUNDLE_DIR/MacOS/a2z-agent"
+
+# Function to show notification
+show_notification() {
+    osascript -e "display notification \"$1\" with title \"A2Z SOC Network Agent\""
+}
+
+# Check if agent is already running
+if curl -s http://localhost:5200/health >/dev/null 2>&1; then
+    show_notification "Agent is already running"
+    open "http://localhost:5200/status"
+    exit 0
+fi
+
+# Start the agent in background
+"$AGENT_PATH" start &
+
+# Wait a moment and check if it started
+sleep 3
+if curl -s http://localhost:5200/health >/dev/null 2>&1; then
+    show_notification "Agent started successfully"
+    open "http://localhost:5200/status"
+else
+    show_notification "Failed to start agent"
+    # Try to show error in Terminal
+    osascript -e 'tell application "Terminal" to do script "'"$AGENT_PATH"' start"'
+fi

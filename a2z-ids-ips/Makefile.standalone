@@ -1,0 +1,269 @@
+# A2Z IDS/IPS Standalone Makefile
+# Cross-platform build and packaging system
+
+.PHONY: help build clean test docker docker-build docker-run package install uninstall
+
+# Configuration
+PROJECT_NAME := a2z-ids-ips
+VERSION := 1.0.0
+BUILD_DIR := build
+DIST_DIR := dist
+DOCKER_IMAGE := a2z-soc/ids-ips
+DOCKER_TAG := $(VERSION)
+
+# Platform detection
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+
+ifeq ($(UNAME_S),Linux)
+    PLATFORM := linux
+    ARCH := $(UNAME_M)
+    PACKAGE_EXT := .tar.gz
+endif
+ifeq ($(UNAME_S),Darwin)
+    PLATFORM := darwin
+    ARCH := $(UNAME_M)
+    PACKAGE_EXT := .tar.gz
+endif
+ifeq ($(OS),Windows_NT)
+    PLATFORM := windows
+    ARCH := amd64
+    PACKAGE_EXT := .zip
+endif
+
+# Build targets
+RUST_TARGET := $(ARCH)-unknown-$(PLATFORM)-gnu
+ifeq ($(PLATFORM),windows)
+    RUST_TARGET := $(ARCH)-pc-windows-msvc
+    BINARY_EXT := .exe
+endif
+ifeq ($(PLATFORM),darwin)
+    RUST_TARGET := $(ARCH)-apple-$(PLATFORM)
+endif
+
+# Default target
+help: ## Show this help message
+	@echo "A2Z IDS/IPS Standalone Build System"
+	@echo "===================================="
+	@echo ""
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ""
+	@echo "Platform: $(PLATFORM) ($(ARCH))"
+	@echo "Rust Target: $(RUST_TARGET)"
+
+# Build targets
+build: build-core build-api build-web ## Build all components
+
+build-core: ## Build the Rust core engine
+	@echo "Building core engine for $(RUST_TARGET)..."
+	cd core-engine && cargo build --release --target $(RUST_TARGET)
+	@mkdir -p $(BUILD_DIR)/bin
+	cp core-engine/target/$(RUST_TARGET)/release/a2z-ids$(BINARY_EXT) $(BUILD_DIR)/bin/
+
+build-api: ## Build the Go management API
+	@echo "Building management API..."
+	cd management-api && GOOS=$(PLATFORM) GOARCH=$(ARCH) go build -o ../$(BUILD_DIR)/bin/a2z-ids-api$(BINARY_EXT)
+
+build-web: ## Build the React web dashboard
+	@echo "Building web dashboard..."
+	cd web-interface && npm install && npm run build
+	@mkdir -p $(BUILD_DIR)/web
+	cp -r web-interface/dist/* $(BUILD_DIR)/web/
+
+# Docker targets
+docker: docker-build ## Build and tag Docker images
+
+docker-build: ## Build Docker images
+	@echo "Building Docker images..."
+	docker-compose -f docker-compose.standalone.yml build
+	docker tag $(PROJECT_NAME)_a2z-ids-core:latest $(DOCKER_IMAGE):core-$(DOCKER_TAG)
+	docker tag $(PROJECT_NAME)_a2z-ids-api:latest $(DOCKER_IMAGE):api-$(DOCKER_TAG)
+	docker tag $(PROJECT_NAME)_a2z-ids-dashboard:latest $(DOCKER_IMAGE):dashboard-$(DOCKER_TAG)
+
+docker-run: ## Run Docker containers
+	docker-compose -f docker-compose.standalone.yml up -d
+
+docker-stop: ## Stop Docker containers
+	docker-compose -f docker-compose.standalone.yml down
+
+docker-logs: ## Show Docker logs
+	docker-compose -f docker-compose.standalone.yml logs -f
+
+# Package targets
+package: package-$(PLATFORM) ## Create platform-specific package
+
+package-linux: build ## Create Linux package
+	@echo "Creating Linux package..."
+	@mkdir -p $(DIST_DIR)
+	tar -czf $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-linux-$(ARCH).tar.gz \
+		-C $(BUILD_DIR) . \
+		-C .. config rules scripts \
+		--transform 's,^,$(PROJECT_NAME)-$(VERSION)/,'
+
+package-darwin: build ## Create macOS package
+	@echo "Creating macOS package..."
+	@mkdir -p $(DIST_DIR)
+	tar -czf $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-darwin-$(ARCH).tar.gz \
+		-C $(BUILD_DIR) . \
+		-C .. config rules scripts \
+		--transform 's,^,$(PROJECT_NAME)-$(VERSION)/,'
+
+package-windows: build ## Create Windows package
+	@echo "Creating Windows package..."
+	@mkdir -p $(DIST_DIR)
+	powershell -Command "Compress-Archive -Path $(BUILD_DIR)\*, config, rules, scripts -DestinationPath $(DIST_DIR)\$(PROJECT_NAME)-$(VERSION)-windows-$(ARCH).zip"
+
+# Installation targets
+install: ## Install A2Z IDS/IPS (requires sudo on Linux/macOS)
+ifeq ($(PLATFORM),windows)
+	powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1
+else
+	sudo bash scripts/deploy.sh
+endif
+
+install-docker: ## Install using Docker
+ifeq ($(PLATFORM),windows)
+	powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1 -SkipBuild
+else
+	sudo bash scripts/deploy.sh --skip-build
+endif
+
+uninstall: ## Uninstall A2Z IDS/IPS
+ifeq ($(PLATFORM),windows)
+	@echo "Stopping services..."
+	docker-compose -f docker-compose.standalone.yml down || true
+	@echo "Please manually remove installation directories"
+else
+	@echo "Stopping services..."
+	sudo docker-compose -f docker-compose.standalone.yml down || true
+	@echo "Removing installation directories..."
+	sudo rm -rf /opt/a2z-ids /var/lib/a2z-ids /var/log/a2z-ids /etc/a2z-ids
+endif
+
+# Development targets
+dev: ## Start development environment
+	docker-compose -f docker-compose.standalone.yml up --build
+
+dev-core: ## Run core engine in development mode
+	cd core-engine && RUST_LOG=debug cargo run -- run --config ../config/config.yaml
+
+dev-api: ## Run API in development mode
+	cd management-api && go run . --config ../config/config.yaml
+
+dev-web: ## Run web dashboard in development mode
+	cd web-interface && npm run dev
+
+# Test targets
+test: test-core test-api test-web ## Run all tests
+
+test-core: ## Test Rust core engine
+	cd core-engine && cargo test
+
+test-api: ## Test Go management API
+	cd management-api && go test ./...
+
+test-web: ## Test React web dashboard
+	cd web-interface && npm test
+
+# Utility targets
+clean: ## Clean build artifacts
+	@echo "Cleaning build artifacts..."
+	rm -rf $(BUILD_DIR) $(DIST_DIR)
+	cd core-engine && cargo clean
+	cd management-api && go clean
+	cd web-interface && rm -rf dist node_modules
+
+deps: ## Install dependencies
+ifeq ($(PLATFORM),windows)
+	@echo "Install dependencies with: choco install rust golang nodejs"
+else ifeq ($(PLATFORM),darwin)
+	@echo "Install dependencies with: brew install rust go node"
+else
+	@echo "Install dependencies with your package manager:"
+	@echo "  Ubuntu/Debian: apt-get install build-essential pkg-config libssl-dev libpcap-dev"
+	@echo "  CentOS/RHEL: yum install gcc gcc-c++ openssl-devel libpcap-devel"
+endif
+
+status: ## Show system status
+	@echo "A2Z IDS/IPS Status"
+	@echo "=================="
+	@echo "Platform: $(PLATFORM) ($(ARCH))"
+	@echo "Docker status:"
+	@docker-compose -f docker-compose.standalone.yml ps || echo "  Docker not running"
+	@echo ""
+	@echo "Services:"
+	@curl -s http://localhost:3000/health >/dev/null 2>&1 && echo "  ✓ Web Dashboard (http://localhost:3000)" || echo "  ✗ Web Dashboard"
+	@curl -s http://localhost:8080/health >/dev/null 2>&1 && echo "  ✓ Management API (http://localhost:8080)" || echo "  ✗ Management API"
+	@curl -s http://localhost:3001 >/dev/null 2>&1 && echo "  ✓ Grafana (http://localhost:3001)" || echo "  ✗ Grafana"
+	@curl -s http://localhost:9090 >/dev/null 2>&1 && echo "  ✓ Prometheus (http://localhost:9090)" || echo "  ✗ Prometheus"
+
+benchmark: ## Run performance benchmarks
+	cd core-engine && cargo bench
+
+lint: ## Run linters
+	cd core-engine && cargo clippy
+	cd management-api && golangci-lint run
+	cd web-interface && npm run lint
+
+format: ## Format code
+	cd core-engine && cargo fmt
+	cd management-api && go fmt ./...
+	cd web-interface && npm run format
+
+# Release targets
+release: clean build test package ## Create release package
+	@echo "Release $(VERSION) created in $(DIST_DIR)/"
+
+docker-release: docker ## Create Docker release
+	@echo "Pushing Docker images..."
+	docker push $(DOCKER_IMAGE):core-$(DOCKER_TAG)
+	docker push $(DOCKER_IMAGE):api-$(DOCKER_TAG)
+	docker push $(DOCKER_IMAGE):dashboard-$(DOCKER_TAG)
+
+# Configuration targets
+config-generate: ## Generate default configuration
+	@mkdir -p config
+	@echo "Generating default configuration..."
+	@echo "# Generated configuration for $(PLATFORM)" > config/platform.yaml
+	@echo "platform: $(PLATFORM)" >> config/platform.yaml
+	@echo "architecture: $(ARCH)" >> config/platform.yaml
+
+# Documentation targets
+docs: ## Generate documentation
+	@echo "Generating documentation..."
+	cd core-engine && cargo doc --no-deps
+	cd management-api && go doc ./...
+
+# Monitoring targets
+logs: ## Show application logs
+	docker-compose -f docker-compose.standalone.yml logs -f
+
+logs-core: ## Show core engine logs
+	docker-compose -f docker-compose.standalone.yml logs -f a2z-ids-core
+
+logs-api: ## Show API logs
+	docker-compose -f docker-compose.standalone.yml logs -f a2z-ids-api
+
+logs-web: ## Show web dashboard logs
+	docker-compose -f docker-compose.standalone.yml logs -f a2z-ids-dashboard
+
+# Network targets
+network-info: ## Show network interface information
+ifeq ($(PLATFORM),windows)
+	ipconfig
+else
+	ip addr show || ifconfig
+endif
+
+# Security targets
+security-scan: ## Run security scans
+	cd core-engine && cargo audit
+	cd management-api && gosec ./...
+	cd web-interface && npm audit
+
+# Backup targets
+backup: ## Backup configuration and data
+	@echo "Creating backup..."
+	@mkdir -p backups
+	tar -czf backups/a2z-ids-backup-$(shell date +%Y%m%d-%H%M%S).tar.gz config rules logs/*.log || true 

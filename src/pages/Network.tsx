@@ -1,6 +1,5 @@
 
 import React from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,8 +8,7 @@ import CustomProgress from '@/components/ui/custom-progress';
 
 const NetworkPage: React.FC = () => {
   return (
-    <MainLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 bg-slate-900 min-h-screen p-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white">Network Monitoring</h1>
         </div>
@@ -155,7 +153,6 @@ const NetworkPage: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>
   );
 };
 

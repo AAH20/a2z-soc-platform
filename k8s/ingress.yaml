@@ -1,0 +1,122 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: a2z-soc-ingress
+  namespace: a2z-soc-production
+  labels:
+    app: a2z-soc
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - a2z-soc.com
+    - www.a2z-soc.com
+    - api.a2z-soc.com
+    secretName: a2z-soc-tls
+  rules:
+  - host: a2z-soc.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: a2z-soc-frontend-service
+            port:
+              number: 80
+  - host: www.a2z-soc.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: a2z-soc-frontend-service
+            port:
+              number: 80
+  - host: api.a2z-soc.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: a2z-soc-api-service
+            port:
+              number: 3001
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: a2z-soc-api-service
+            port:
+              number: 3001
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: a2z-soc-monitoring-ingress
+  namespace: a2z-soc-monitoring
+  labels:
+    app: a2z-soc-monitoring
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: monitoring-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - A2Z SOC Monitoring'
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - monitoring.a2z-soc.com
+    - grafana.a2z-soc.com
+    - prometheus.a2z-soc.com
+    secretName: a2z-soc-monitoring-tls
+  rules:
+  - host: monitoring.a2z-soc.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana-service
+            port:
+              number: 3000
+  - host: grafana.a2z-soc.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana-service
+            port:
+              number: 3000
+  - host: prometheus.a2z-soc.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-service
+            port:
+              number: 9090 

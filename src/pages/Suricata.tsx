@@ -1,6 +1,5 @@
 
 import React, { useState } from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import {
   Card,
   CardContent,
@@ -39,7 +38,6 @@ const suricataStatus = {
 
 const Suricata: React.FC = () => {
   return (
-    <MainLayout>
       <div className="px-2">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -259,7 +257,6 @@ const Suricata: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   );
 };
 

@@ -1,0 +1,15 @@
+{
+  "name": "a2z-soc-network-agent-macos",
+  "version": "1.2.3",
+  "description": "A2Z SOC Network Agent for macOS",
+  "type": "commonjs",
+  "main": "lib/index.js",
+  "bin": {
+    "a2z-agent": "bin/a2z-agent"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "os": ["darwin"],
+  "license": "UNLICENSED"
+} 

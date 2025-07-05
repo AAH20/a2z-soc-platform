@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: a2z-soc-production
+  labels:
+    name: a2z-soc-production
+    environment: production
+    app: a2z-soc
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: a2z-soc-monitoring
+  labels:
+    name: a2z-soc-monitoring
+    environment: production
+    app: a2z-soc-monitoring
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: a2z-soc-staging
+  labels:
+    name: a2z-soc-staging
+    environment: staging
+    app: a2z-soc 

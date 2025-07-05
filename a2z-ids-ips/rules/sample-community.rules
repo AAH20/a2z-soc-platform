@@ -1,0 +1,32 @@
+# Sample Snort Community Rules for A2Z IDS/IPS
+# These are example rules for demonstration purposes
+
+# SSH Brute Force Detection
+alert tcp any any -> $HOME_NET 22 (msg:"SSH Brute Force Attack Detected"; flow:to_server,established; content:"SSH-"; detection_filter:track by_src, count 5, seconds 60; classtype:attempted-recon; sid:1000001; rev:1;)
+
+# HTTP SQL Injection Detection  
+alert tcp any any -> $HOME_NET [80,443] (msg:"Potential SQL Injection - Union Select"; flow:to_server,established; content:"union"; nocase; content:"select"; nocase; distance:0; within:20; http_uri; classtype:web-application-attack; sid:1000002; rev:1;)
+
+# Port Scan Detection
+alert tcp any any -> $HOME_NET any (msg:"Port Scan Detected"; flags:S; detection_filter:track by_src, count 10, seconds 60; classtype:attempted-recon; sid:1000003; rev:1;)
+
+# ICMP Ping Sweep
+alert icmp any any -> $HOME_NET any (msg:"ICMP Ping Sweep Detected"; itype:8; detection_filter:track by_src, count 10, seconds 60; classtype:attempted-recon; sid:1000004; rev:1;)
+
+# Large Data Upload (Potential Exfiltration)
+alert tcp $HOME_NET any -> $EXTERNAL_NET [80,443] (msg:"Large Data Upload - Potential Exfiltration"; flow:to_server,established; dsize:>1000000; threshold:type limit, track by_src, count 1, seconds 300; classtype:policy-violation; sid:1000005; rev:1;)
+
+# Malware C2 Communication Pattern
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"Potential Malware C2 Communication"; flow:to_server,established; dsize:100<>200; detection_filter:track by_src, count 10, seconds 600; classtype:trojan-activity; sid:1000006; rev:1;)
+
+# DNS Tunneling Detection
+alert udp $HOME_NET any -> any 53 (msg:"Potential DNS Tunneling"; content:"|01 00 00 01 00 00 00 00 00 00|"; content:"|00 10 00 01|"; distance:0; classtype:policy-violation; sid:1000007; rev:1;)
+
+# Web Shell Access
+alert tcp any any -> $HOME_NET [80,443] (msg:"Potential Web Shell Access"; flow:to_server,established; content:"cmd"; http_uri; content:"exec"; http_uri; distance:0; within:50; classtype:web-application-attack; sid:1000008; rev:1;)
+
+# FTP Brute Force
+alert tcp any any -> $HOME_NET 21 (msg:"FTP Brute Force Attack"; flow:to_server,established; content:"USER "; detection_filter:track by_src, count 5, seconds 60; classtype:attempted-recon; sid:1000009; rev:1;)
+
+# SNMP Community String Brute Force
+alert udp any any -> $HOME_NET 161 (msg:"SNMP Community String Brute Force"; content:"|30|"; depth:1; content:"|04|"; distance:0; within:10; detection_filter:track by_src, count 5, seconds 60; classtype:attempted-recon; sid:1000010; rev:1;) 

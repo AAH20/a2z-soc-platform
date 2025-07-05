@@ -1,0 +1,49 @@
+{
+    "agentId": "",
+    "version": "1.2.3",
+    "platform": "darwin",
+    "tenantId": "",
+    "apiKey": "",
+    "cloudEndpoint": "wss://api.a2zsoc.com",
+    "networkInterface": "any",
+    "apiPort": 5200,
+    "apiHost": "127.0.0.1",
+    "logLevel": "info",
+    "pcapFilter": "ip",
+    "bufferSize": 10485760,
+    "bufferTimeout": 1000,
+    "maxBufferSize": 1000,
+    "heartbeatInterval": 30000,
+    "dataTransmissionInterval": 60000,
+    "logCollection": {
+        "enabled": true,
+        "sources": [
+            "unified-log",
+            "system-logs",
+            "application-logs",
+            "crash-reports"
+        ],
+        "filters": {
+            "excludePatterns": [
+                ".*debug.*",
+                ".*verbose.*"
+            ],
+            "includePatterns": [
+                ".*error.*",
+                ".*warning.*",
+                ".*security.*",
+                ".*network.*"
+            ]
+        }
+    },
+    "security": {
+        "tlsVerify": true,
+        "encryptData": true,
+        "anonymizeIPs": false
+    },
+    "storage": {
+        "localBuffer": true,
+        "maxLocalStorage": "100MB",
+        "retentionDays": 7
+    }
+}

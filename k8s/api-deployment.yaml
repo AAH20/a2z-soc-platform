@@ -1,0 +1,189 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: a2z-soc-api-deployment
+  namespace: a2z-soc-production
+  labels:
+    app: a2z-soc-api
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: a2z-soc-api
+  template:
+    metadata:
+      labels:
+        app: a2z-soc-api
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3001"
+        prometheus.io/path: "/metrics"
+    spec:
+      imagePullSecrets:
+      - name: registry-credentials
+      containers:
+      - name: a2z-soc-api
+        image: registry.a2z-soc.com/a2z-soc-api:latest
+        ports:
+        - containerPort: 3001
+          name: http
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: a2z-soc-config
+              key: NODE_ENV
+        - name: API_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: a2z-soc-config
+              key: API_PORT
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: a2z-soc-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: a2z-soc-config
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: a2z-soc-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: a2z-soc-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: a2z-soc-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: a2z-soc-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: a2z-soc-config
+              key: REDIS_PORT
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: a2z-soc-secrets
+              key: REDIS_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: a2z-soc-secrets
+              key: JWT_SECRET
+        - name: API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: a2z-soc-secrets
+              key: API_SECRET
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: app-logs
+          mountPath: /app/logs
+        - name: temp-storage
+          mountPath: /tmp
+      volumes:
+      - name: app-logs
+        emptyDir: {}
+      - name: temp-storage
+        emptyDir: {}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: a2z-soc-api-service
+  namespace: a2z-soc-production
+  labels:
+    app: a2z-soc-api
+    tier: backend
+spec:
+  selector:
+    app: a2z-soc-api
+  ports:
+  - name: http
+    port: 3001
+    targetPort: 3001
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: a2z-soc-api-hpa
+  namespace: a2z-soc-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: a2z-soc-api-deployment
+  minReplicas: 3
+  maxReplicas: 100
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max 

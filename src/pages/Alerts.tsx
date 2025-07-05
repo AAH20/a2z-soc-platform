@@ -1,6 +1,4 @@
-
-import React, { useState } from 'react';
-import MainLayout from '@/components/layout/MainLayout';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,6 +6,7 @@ import { AlertCircle, Bell, Filter, RefreshCw, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { apiService } from '@/services/api';
 
 type AlertSeverity = "low" | "medium" | "high" | "critical";
 
@@ -20,74 +19,6 @@ interface Alert {
   technique?: string;
 }
 
-// Dummy alerts data with proper typing
-const initialAlerts: Alert[] = [
-  {
-    id: "alert-1",
-    severity: "critical",
-    source: "Wazuh",
-    description: "Potential data exfiltration detected from host 192.168.1.105",
-    timestamp: "2023-05-15 14:32:45",
-    technique: "Exfiltration"
-  },
-  {
-    id: "alert-2",
-    severity: "high",
-    source: "Snort",
-    description: "Suspicious outbound connection to known malicious IP 45.123.2.5",
-    timestamp: "2023-05-15 13:15:22",
-    technique: "Command and Control"
-  },
-  {
-    id: "alert-3",
-    severity: "medium",
-    source: "Suricata",
-    description: "Multiple failed login attempts detected on admin portal",
-    timestamp: "2023-05-15 12:05:33",
-    technique: "Credential Access"
-  },
-  {
-    id: "alert-4",
-    severity: "low",
-    source: "VirusTotal",
-    description: "Suspicious file hash detected in email attachment",
-    timestamp: "2023-05-15 11:52:18",
-    technique: "Initial Access"
-  },
-  {
-    id: "alert-5",
-    severity: "critical",
-    source: "Wazuh",
-    description: "Privilege escalation attempt detected on server SVR001",
-    timestamp: "2023-05-15 10:22:55",
-    technique: "Privilege Escalation"
-  },
-  {
-    id: "alert-6",
-    severity: "high",
-    source: "Snort",
-    description: "Unusual port scanning activity detected from internal host",
-    timestamp: "2023-05-15 09:47:12",
-    technique: "Discovery"
-  },
-  {
-    id: "alert-7",
-    severity: "medium",
-    source: "Suricata",
-    description: "Encrypted communication with untrusted external endpoint",
-    timestamp: "2023-05-15 08:33:49",
-    technique: "Command and Control"
-  },
-  {
-    id: "alert-8",
-    severity: "low",
-    source: "VirusTotal",
-    description: "Potentially unwanted application detected on workstation WS056",
-    timestamp: "2023-05-15 07:18:21",
-    technique: "Execution"
-  }
-];
-
 const severityColors = {
   low: 'bg-alert-low text-white',
   medium: 'bg-alert-medium text-black',
@@ -96,30 +27,80 @@ const severityColors = {
 };
 
 const AlertsPage: React.FC = () => {
-  const [alerts, setAlerts] = useState<Alert[]>(initialAlerts);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const handleClearAlerts = () => {
-    setAlerts([]);
+  const fetchAlerts = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiService.get('/api/security-events', {
+        params: {
+          limit: 50,
+          sortBy: 'timestamp',
+          sortOrder: 'desc'
+        }
+      });
+
+      if (response.data?.success) {
+        const securityEvents = response.data.data.map((event: any) => ({
+          id: event.id,
+          severity: event.severity || 'medium',
+          source: event.source || 'Security Monitor',
+          description: event.description || event.event_type,
+          timestamp: new Date(event.timestamp).toLocaleString(),
+          technique: event.mitre_technique_name || event.technique
+        }));
+        setAlerts(securityEvents);
+      }
+    } catch (error) {
+      console.error('Failed to fetch alerts:', error);
+      toast({
+        title: "Failed to load alerts",
+        description: "Could not retrieve security events",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClearAlerts = async () => {
+    try {
+      const response = await apiService.delete('/api/security-events');
+      if (response.data?.success) {
+        setAlerts([]);
+        toast({
+          title: "Alerts cleared",
+          description: "All alert data has been removed",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to clear alerts:', error);
+      toast({
+        title: "Failed to clear alerts",
+        description: "Could not remove alert data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRefreshAlerts = () => {
+    fetchAlerts();
     toast({
-      title: "Alerts cleared",
-      description: "All alert data has been removed",
+      title: "Alerts refreshed",
+      description: "Alert data has been updated",
       variant: "default",
     });
   };
 
-  const handleRestoreAlerts = () => {
-    setAlerts(initialAlerts);
-    toast({
-      title: "Alerts restored",
-      description: "Default alert data has been restored",
-      variant: "default",
-    });
-  };
+  useEffect(() => {
+    fetchAlerts();
+  }, []);
 
   return (
-    <MainLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 bg-slate-900 min-h-screen p-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-white">Security Alerts</h1>
@@ -132,18 +113,18 @@ const AlertsPage: React.FC = () => {
               variant="outline" 
               size="sm" 
               className="gap-2"
-              onClick={handleRestoreAlerts}
-              disabled={alerts.length === initialAlerts.length}
+              onClick={handleRefreshAlerts}
+              disabled={isLoading}
             >
-              <RefreshCw className="h-4 w-4" />
-              Restore
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
             <Button 
               variant="destructive" 
               size="sm" 
               className="gap-2"
               onClick={handleClearAlerts}
-              disabled={alerts.length === 0}
+              disabled={alerts.length === 0 || isLoading}
             >
               <X className="h-4 w-4" />
               Clear All
@@ -177,7 +158,12 @@ const AlertsPage: React.FC = () => {
               <CardContent>
                 <ScrollArea className="h-[500px] pr-4">
                   <div className="space-y-4">
-                    {alerts.length > 0 ? (
+                    {isLoading ? (
+                      <div className="text-center py-12">
+                        <RefreshCw className="h-12 w-12 text-gray-500 mx-auto mb-4 animate-spin" />
+                        <p className="text-gray-400">Loading alerts...</p>
+                      </div>
+                    ) : alerts.length > 0 ? (
                       alerts.map((alert) => (
                         <div 
                           key={alert.id} 
@@ -215,9 +201,9 @@ const AlertsPage: React.FC = () => {
                           variant="outline" 
                           size="sm" 
                           className="mt-4"
-                          onClick={handleRestoreAlerts}
+                          onClick={handleRefreshAlerts}
                         >
-                          Restore Alerts
+                          Refresh Alerts
                         </Button>
                       </div>
                     )}
@@ -277,9 +263,9 @@ const AlertsPage: React.FC = () => {
                             variant="outline" 
                             size="sm" 
                             className="mt-4"
-                            onClick={handleRestoreAlerts}
+                            onClick={handleRefreshAlerts}
                           >
-                            Restore Alerts
+                            Refresh Alerts
                           </Button>
                         </div>
                       )}
@@ -291,7 +277,6 @@ const AlertsPage: React.FC = () => {
           ))}
         </Tabs>
       </div>
-    </MainLayout>
   );
 };
 

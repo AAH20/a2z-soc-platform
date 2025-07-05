@@ -1,6 +1,5 @@
 
 import React from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import {
   Card,
   CardContent,
@@ -26,7 +25,6 @@ import {
 
 const Snort: React.FC = () => {
   return (
-    <MainLayout>
       <div className="px-2">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -348,7 +346,6 @@ const Snort: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   );
 };
 

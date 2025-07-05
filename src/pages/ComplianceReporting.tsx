@@ -1,6 +1,4 @@
-
-import React, { useState } from 'react';
-import MainLayout from '@/components/layout/MainLayout';
+import React, { useState, useEffect } from 'react';
 import { 
   Tabs, 
   TabsContent, 
@@ -36,7 +34,17 @@ import {
   Trash2,
   Edit,
   CheckCircle2,
-  Search
+  Search,
+  AlertTriangle,
+  Shield,
+  Network,
+  Server,
+  Database,
+  Cloud,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Activity
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -70,781 +78,767 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { useAuth } from '@/components/auth/AuthProvider';
+import complianceService, { 
+  ComplianceAssessment, 
+  ComplianceReport, 
+  NetworkResource,
+  ComplianceFinding,
+  ComplianceRecommendation 
+} from '@/services/complianceService';
+import { apiService } from '@/services/api';
 
-// Mock data for compliance templates
-const complianceTemplates = [
-  {
-    id: 1,
-    name: "GDPR Compliance Report",
-    description: "Assessment of compliance with the General Data Protection Regulation",
-    framework: "GDPR",
-    lastGenerated: "2023-12-15",
-    sections: [
-      "Data Protection Policy Review",
-      "Data Subject Rights Implementation",
-      "Consent Mechanisms",
-      "Processor Controls",
-      "Cross-border Transfer Compliance",
-      "Data Protection Impact Assessments"
-    ]
-  },
-  {
-    id: 2,
-    name: "HIPAA Security Assessment",
-    description: "Evaluation of safeguards for protected health information",
-    framework: "HIPAA",
-    lastGenerated: "2024-01-10",
-    sections: [
-      "Administrative Safeguards",
-      "Physical Safeguards",
-      "Technical Safeguards",
-      "Organizational Requirements",
-      "Policies and Procedures",
-      "Breach Notification Compliance"
-    ]
-  },
-  {
-    id: 3,
-    name: "SOC 2 Type II Readiness",
-    description: "Preparedness assessment for SOC 2 Type II audit",
-    framework: "SOC2",
-    lastGenerated: "2024-02-05",
-    sections: [
-      "Security Control Environment",
-      "Communication Controls",
-      "Risk Management",
-      "Monitoring Activities",
-      "Logical Access Controls",
-      "System Operations"
-    ]
-  },
-  {
-    id: 4,
-    name: "ISO 27001 Gap Analysis",
-    description: "Identification of gaps in ISO 27001 compliance",
-    framework: "ISO 27001",
-    lastGenerated: "2024-02-20",
-    sections: [
-      "Information Security Policies",
-      "Organization of Information Security",
-      "Human Resource Security",
-      "Asset Management",
-      "Access Control",
-      "Cryptography"
-    ]
-  }
-];
+interface ComplianceTemplate {
+  id: number;
+  name: string;
+  description: string;
+  framework: string;
+  lastGenerated: string;
+  sections: string[];
+}
 
-// Mock data for scheduled reports
-const scheduledReports = [
-  {
-    id: 1,
-    name: "Monthly GDPR Compliance Check",
-    template: "GDPR Compliance Report",
-    frequency: "Monthly",
-    nextRun: "2024-03-15",
-    recipients: ["security@example.com", "dpo@example.com"],
-    status: "Active"
-  },
-  {
-    id: 2,
-    name: "Quarterly HIPAA Assessment",
-    template: "HIPAA Security Assessment",
-    frequency: "Quarterly",
-    nextRun: "2024-04-01",
-    recipients: ["compliance@example.com", "security@example.com"],
-    status: "Active"
-  },
-  {
-    id: 3,
-    name: "Weekly Security Controls Review",
-    template: "SOC 2 Type II Readiness",
-    frequency: "Weekly",
-    nextRun: "2024-03-05",
-    recipients: ["infosec@example.com"],
-    status: "Paused"
-  }
-];
+interface ScheduledReport {
+  id: number;
+  name: string;
+  template: string;
+  frequency: string;
+  nextRun: string;
+  recipients: string[];
+  status: string;
+}
 
-// Mock data for audit trails
-const auditTrails = [
-  {
-    id: 1,
-    action: "Report Generated",
-    reportName: "GDPR Compliance Report",
-    user: "admin@example.com",
-    timestamp: "2024-03-01 14:25:33",
-    ipAddress: "192.168.1.105"
-  },
-  {
-    id: 2,
-    action: "Report Scheduled",
-    reportName: "HIPAA Security Assessment",
-    user: "security@example.com",
-    timestamp: "2024-03-01 10:12:45",
-    ipAddress: "192.168.1.110"
-  },
-  {
-    id: 3,
-    action: "Evidence Uploaded",
-    reportName: "SOC 2 Type II Readiness",
-    user: "auditor@example.com",
-    timestamp: "2024-02-29 16:45:22",
-    ipAddress: "192.168.1.115"
-  },
-  {
-    id: 4,
-    action: "Report Downloaded",
-    reportName: "ISO 27001 Gap Analysis",
-    user: "ciso@example.com",
-    timestamp: "2024-02-28 09:33:57",
-    ipAddress: "192.168.1.120"
-  },
-  {
-    id: 5,
-    action: "Template Modified",
-    reportName: "GDPR Compliance Report",
-    user: "admin@example.com",
-    timestamp: "2024-02-27 11:15:40",
-    ipAddress: "192.168.1.105"
-  }
-];
+interface AuditTrail {
+  id: number;
+  action: string;
+  reportName: string;
+  user: string;
+  timestamp: string;
+  ipAddress: string;
+}
 
-// Mock data for evidence collection
-const evidenceItems = [
-  {
-    id: 1,
-    name: "Firewall Configuration Backup",
-    description: "Monthly backup of firewall rules and configuration",
-    relatedControl: "Access Control",
-    framework: "ISO 27001",
-    dateCollected: "2024-02-15",
-    collectedBy: "system_admin",
-    status: "Verified"
-  },
-  {
-    id: 2,
-    name: "Employee Security Training Records",
-    description: "Annual security awareness training completion records",
-    relatedControl: "Human Resource Security",
-    framework: "GDPR",
-    dateCollected: "2024-01-30",
-    collectedBy: "hr_manager",
-    status: "Pending Review"
-  },
-  {
-    id: 3,
-    name: "Data Processing Agreement",
-    description: "Signed DPA with cloud service provider",
-    relatedControl: "Processor Controls",
-    framework: "GDPR",
-    dateCollected: "2024-02-10",
-    collectedBy: "legal_team",
-    status: "Verified"
-  },
-  {
-    id: 4,
-    name: "System Access Logs",
-    description: "Quarterly export of access logs for critical systems",
-    relatedControl: "Monitoring Activities",
-    framework: "SOC 2",
-    dateCollected: "2024-03-01",
-    collectedBy: "security_analyst",
-    status: "Pending Review"
-  }
-];
+interface EvidenceItem {
+  id: number;
+  name: string;
+  description: string;
+  relatedControl: string;
+  framework: string;
+  dateCollected: string;
+  collectedBy: string;
+  status: string;
+}
 
 const ComplianceReporting: React.FC = () => {
-  const [activeTab, setActiveTab] = useState("templates");
-  const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
-  const [showReportDialog, setShowReportDialog] = useState(false);
-  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
-  const [showEvidenceDialog, setShowEvidenceDialog] = useState(false);
-  const [generatedReport, setGeneratedReport] = useState<{ id: number; name: string; format: string } | null>(null);
-  
   const { toast } = useToast();
+  const { user, tenant } = useAuth();
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [loading, setLoading] = useState(false);
+  const [currentAssessment, setCurrentAssessment] = useState<ComplianceAssessment | null>(null);
+  const [networkResources, setNetworkResources] = useState<NetworkResource[]>([]);
+  const [selectedFramework, setSelectedFramework] = useState('soc2');
+  const [complianceReports, setComplianceReports] = useState<ComplianceReport[]>([]);
+  const [complianceTemplates, setComplianceTemplates] = useState<ComplianceTemplate[]>([]);
+  const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>([]);
+  const [auditTrails, setAuditTrails] = useState<AuditTrail[]>([]);
+  const [evidenceItems, setEvidenceItems] = useState<EvidenceItem[]>([]);
+  const [lastRefresh, setLastRefresh] = useState<string>(new Date().toISOString());
 
-  const generateReport = (templateId: number) => {
-    setSelectedTemplate(templateId);
-    setShowReportDialog(true);
-  };
+  // Available compliance frameworks
+  const frameworks = [
+    { id: 'soc2', name: 'SOC 2 Type II', description: 'Service Organization Control 2' },
+    { id: 'gdpr', name: 'GDPR', description: 'General Data Protection Regulation' },
+    { id: 'hipaa', name: 'HIPAA', description: 'Health Insurance Portability and Accountability Act' },
+    { id: 'iso27001', name: 'ISO 27001', description: 'Information Security Management' },
+    { id: 'pci-dss', name: 'PCI DSS', description: 'Payment Card Industry Data Security Standard' },
+  ];
 
-  const scheduleReport = (templateId: number) => {
-    setSelectedTemplate(templateId);
-    setShowScheduleDialog(true);
-  };
-
-  const handleGenerateNow = () => {
-    const template = complianceTemplates.find(t => t.id === selectedTemplate);
-    
-    if (template) {
-      setGeneratedReport({
-        id: Date.now(),
-        name: template.name,
-        format: 'pdf'
-      });
+  // Fetch all compliance data from API
+  const loadComplianceData = async () => {
+    try {
+      setLoading(true);
       
-      setShowReportDialog(false);
+      const [templatesRes, reportsRes, auditRes, evidenceRes] = await Promise.all([
+        apiService.get('/api/compliance/templates'),
+        apiService.get('/api/compliance/scheduled-reports'),
+        apiService.get('/api/audit-logs'),
+        apiService.get('/api/compliance/evidence')
+      ]);
+      
+      if (templatesRes.data?.success) {
+        setComplianceTemplates(templatesRes.data.data);
+      }
+      
+      if (reportsRes.data?.success) {
+        setScheduledReports(reportsRes.data.data);
+      }
+      
+      if (auditRes.data?.success) {
+        const auditData = auditRes.data.data.map((audit: any) => ({
+          id: audit.id,
+          action: audit.action,
+          reportName: audit.resource_type || 'System',
+          user: audit.user_email || audit.user_id,
+          timestamp: audit.timestamp,
+          ipAddress: audit.ip_address || 'N/A'
+        }));
+        setAuditTrails(auditData);
+      }
+      
+      if (evidenceRes.data?.success) {
+        setEvidenceItems(evidenceRes.data.data);
+      }
+      
+      // Fetch assessment data if framework is selected
+      if (selectedFramework) {
+        const assessment = await complianceService.runAssessment(selectedFramework);
+        setCurrentAssessment(assessment);
+        
+        if (assessment.resources) {
+          setNetworkResources(assessment.resources);
+        }
+      }
+      
+      setLastRefresh(new Date().toISOString());
+      
+    } catch (error) {
+      console.error('Failed to load compliance data:', error);
       toast({
-        title: "Report Generated",
-        description: "The compliance report has been generated successfully and is ready for download.",
-        duration: 3000,
+        title: "Failed to load compliance data",
+        description: "Using cached data where available",
+        variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDownloadReport = () => {
-    if (generatedReport) {
-      // In a real-world scenario, this would trigger an actual file download
+  useEffect(() => {
+    loadComplianceData();
+  }, [selectedFramework]);
+
+  const generateReport = async (frameworkId: string, reportName?: string) => {
+    if (!tenant?.id) return;
+
+    setLoading(true);
+    try {
+      const report = await complianceService.generateComplianceReport(
+        tenant.id, 
+        frameworkId, 
+        reportName || `${frameworks.find(f => f.id === frameworkId)?.name} Compliance Report`
+      );
+      
+      setComplianceReports(prev => [report, ...prev]);
+      
       toast({
-        title: "Downloading Report",
-        description: `${generatedReport.name}.${generatedReport.format} is being downloaded.`,
-        duration: 3000,
+        title: "Report Generated Successfully",
+        description: `${report.reportName} has been generated and is ready for download.`,
       });
+    } catch (error) {
+      console.error('Error generating report:', error);
+      toast({
+        title: "Report Generation Failed",
+        description: "There was an error generating the compliance report.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleScheduleReport = () => {
-    setShowScheduleDialog(false);
-    toast({
-      title: "Report Scheduled",
-      description: "The compliance report has been scheduled successfully.",
-      duration: 3000,
-    });
-  };
+  const downloadReport = async (reportId: string) => {
+    try {
+      // In a real implementation, this would generate and download the actual report
+      const report = complianceReports.find(r => r.id === reportId);
+      if (report) {
+        const reportData = JSON.stringify(report, null, 2);
+        const blob = new Blob([reportData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${report.reportName.replace(/\s+/g, '_')}_${report.generatedAt.split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
-  const handleAddEvidence = () => {
-    setShowEvidenceDialog(false);
-    toast({
-      title: "Evidence Added",
-      description: "The evidence item has been added to the collection.",
-      duration: 3000,
-    });
+        toast({
+          title: "Report Downloaded",
+          description: "The compliance report has been downloaded successfully.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "There was an error downloading the report.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "bg-green-500 text-white";
-      case "Paused":
-        return "bg-amber-500 text-white";
-      case "Verified":
-        return "bg-cyber-success text-white";
-      case "Pending Review":
-        return "bg-amber-500 text-white";
+    switch (status.toLowerCase()) {
+      case 'compliant':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'partially-compliant':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'non-compliant':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'pass':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'fail':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'not-applicable':
+        return 'bg-gray-100 text-gray-800 border-gray-200';
       default:
-        return "bg-cyber-gray";
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
+  const getSeverityIcon = (severity: string) => {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return <AlertTriangle className="h-4 w-4 text-red-600" />;
+      case 'high':
+        return <AlertTriangle className="h-4 w-4 text-orange-600" />;
+      case 'medium':
+        return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
+      case 'low':
+        return <AlertTriangle className="h-4 w-4 text-blue-600" />;
+      default:
+        return <Shield className="h-4 w-4 text-gray-600" />;
+    }
+  };
+
+  const getResourceIcon = (type: string) => {
+    switch (type) {
+      case 'ec2':
+      case 'vm':
+      case 'compute':
+        return <Server className="h-4 w-4" />;
+      case 'database':
+        return <Database className="h-4 w-4" />;
+      case 'network':
+        return <Network className="h-4 w-4" />;
+      case 'container':
+      case 'function':
+        return <Cloud className="h-4 w-4" />;
+      default:
+        return <Server className="h-4 w-4" />;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatCurrency = (amount: string) => {
+    return amount;
+  };
+
   return (
-    <MainLayout>
-      <div className="flex flex-col space-y-4">
-        <div className="flex items-center gap-2">
-          <FileText className="h-6 w-6 text-cyber-accent" />
-          <h1 className="text-2xl font-bold">Compliance & Reporting</h1>
+    <div className="h-screen w-full bg-slate-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Compliance Reporting</h1>
+            <p className="text-slate-400 mt-2">
+              Dynamic compliance assessments based on your connected infrastructure
+            </p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Select value={selectedFramework} onValueChange={setSelectedFramework}>
+              <SelectTrigger className="w-64 bg-slate-800 border-slate-700 text-white">
+                <SelectValue placeholder="Select Framework" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-700">
+                {frameworks.map((framework) => (
+                  <SelectItem key={framework.id} value={framework.id} className="text-white">
+                    {framework.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              onClick={() => loadComplianceData()} 
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {loading ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Refresh Assessment
+            </Button>
+          </div>
         </div>
-        
-        <p className="text-cyber-lightgray mb-4">
-          Generate, schedule, and manage compliance reports and evidence for security audits.
-        </p>
-        
-        {generatedReport && (
-          <Card className="bg-cyber-accent/10 border-cyber-accent animate-fade-in">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-cyber-accent" />
-                  <span>Your report "{generatedReport.name}" is ready!</span>
-                </div>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="text-cyber-accent border-cyber-accent hover:bg-cyber-accent hover:text-white"
-                  onClick={handleDownloadReport}
-                >
-                  <Download className="h-4 w-4 mr-1" />
-                  Download {generatedReport.format.toUpperCase()}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        
-        <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-4 w-full flex flex-wrap justify-start gap-2 bg-transparent">
-            <TabsTrigger 
-              value="templates" 
-              className="data-[state=active]:bg-cyber-accent data-[state=active]:text-white"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Compliance Templates
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="bg-slate-800 border-slate-700">
+            <TabsTrigger value="dashboard" className="data-[state=active]:bg-slate-700 data-[state=active]:text-white">
+              <Activity className="h-4 w-4 mr-2" />
+              Dashboard
             </TabsTrigger>
-            <TabsTrigger 
-              value="scheduled" 
-              className="data-[state=active]:bg-cyber-accent data-[state=active]:text-white"
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              Scheduled Reports
-            </TabsTrigger>
-            <TabsTrigger 
-              value="audit" 
-              className="data-[state=active]:bg-cyber-accent data-[state=active]:text-white"
-            >
+            <TabsTrigger value="assessment" className="data-[state=active]:bg-slate-700 data-[state=active]:text-white">
               <ClipboardList className="h-4 w-4 mr-2" />
-              Audit Trails
+              Assessment Details
             </TabsTrigger>
-            <TabsTrigger 
-              value="evidence" 
-              className="data-[state=active]:bg-cyber-accent data-[state=active]:text-white"
-            >
-              <FolderArchive className="h-4 w-4 mr-2" />
-              Evidence Collection
+            <TabsTrigger value="resources" className="data-[state=active]:bg-slate-700 data-[state=active]:text-white">
+              <Network className="h-4 w-4 mr-2" />
+              Infrastructure
+            </TabsTrigger>
+            <TabsTrigger value="reports" className="data-[state=active]:bg-slate-700 data-[state=active]:text-white">
+              <FileText className="h-4 w-4 mr-2" />
+              Reports
             </TabsTrigger>
           </TabsList>
-          
-          {/* Compliance Templates Tab */}
-          <TabsContent value="templates" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {complianceTemplates.map((template) => (
-                <Card key={template.id} className="bg-cyber-darker border border-cyber-accent/20 hover:border-cyber-accent/50 transition-all">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-cyber-accent" />
-                          {template.name}
-                        </CardTitle>
-                        <CardDescription className="mt-1">
-                          {template.description}
-                        </CardDescription>
-                      </div>
-                      <Badge className="bg-cyber-accent text-white">
-                        {template.framework}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-white mb-2 font-medium">Key sections:</p>
-                    <div className="bg-cyber-dark/50 p-3 rounded-md border border-cyber-gray/30">
-                      <ul className="text-sm space-y-1 text-cyber-lightgray">
-                        {template.sections.slice(0, 4).map((section, index) => (
-                          <li key={index} className="flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 rounded-full bg-cyber-accent"></span>
-                            {section}
-                          </li>
-                        ))}
-                        {template.sections.length > 4 && (
-                          <li className="text-cyber-accent font-medium">
-                            +{template.sections.length - 4} more sections
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                    
-                    <div className="text-xs text-cyber-lightgray mt-3">
-                      Last generated: {template.lastGenerated}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex gap-2 pt-2 justify-end border-t border-cyber-darkgray">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="text-cyber-accent border-cyber-accent hover:bg-cyber-accent hover:text-white"
-                      onClick={() => generateReport(template.id)}
-                    >
-                      <Download className="h-4 w-4 mr-1" />
-                      Generate
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="text-cyber-accent border-cyber-accent hover:bg-cyber-accent hover:text-white"
-                      onClick={() => scheduleReport(template.id)}
-                    >
-                      <Calendar className="h-4 w-4 mr-1" />
-                      Schedule
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-          
-          {/* Scheduled Reports Tab */}
-          <TabsContent value="scheduled" className="space-y-4">
-            <div className="flex justify-end mb-4">
-              <Button 
-                className="bg-cyber-accent hover:bg-cyber-accent/90 text-white"
-                onClick={() => setShowScheduleDialog(true)}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                New Scheduled Report
-              </Button>
-            </div>
-            
-            <Card className="bg-cyber-gray border-cyber-darkgray">
-              <CardHeader>
-                <CardTitle className="text-lg">Scheduled Report Jobs</CardTitle>
-                <CardDescription>
-                  View and manage automated report generation jobs
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader className="bg-cyber-darker">
-                    <TableRow>
-                      <TableHead>Report Name</TableHead>
-                      <TableHead>Template</TableHead>
-                      <TableHead>Frequency</TableHead>
-                      <TableHead>Next Run</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {scheduledReports.map((report) => (
-                      <TableRow key={report.id}>
-                        <TableCell>{report.name}</TableCell>
-                        <TableCell>{report.template}</TableCell>
-                        <TableCell>{report.frequency}</TableCell>
-                        <TableCell>{report.nextRun}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(report.status)}>
-                            {report.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <Button size="icon" variant="ghost">
-                            <Edit className="h-4 w-4 text-cyber-accent" />
-                          </Button>
-                          <Button size="icon" variant="ghost">
-                            <Bell className="h-4 w-4 text-cyber-accent" />
-                          </Button>
-                          <Button size="icon" variant="ghost">
-                            <Trash2 className="h-4 w-4 text-cyber-accent" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-            
-            <Card className="bg-cyber-gray border-cyber-darkgray">
-              <CardHeader>
-                <CardTitle className="text-lg">Distribution Settings</CardTitle>
-                <CardDescription>
-                  Configure email notifications and report delivery options
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-cyber-darker p-4 rounded-md">
-                    <h3 className="text-sm font-medium mb-2 flex items-center">
-                      <SendHorizonal className="h-4 w-4 mr-2 text-cyber-accent" />
-                      Email Delivery
-                    </h3>
-                    <p className="text-xs text-cyber-lightgray mb-2">
-                      Reports will be sent via email to configured recipients with secure PDF attachments
-                    </p>
-                    <div className="mt-2">
-                      <Button size="sm" variant="outline" className="text-xs">
-                        Configure SMTP
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-cyber-darker p-4 rounded-md">
-                    <h3 className="text-sm font-medium mb-2 flex items-center">
-                      <Bell className="h-4 w-4 mr-2 text-cyber-accent" />
-                      Notification Rules
-                    </h3>
-                    <p className="text-xs text-cyber-lightgray mb-2">
-                      Set up alerts for report generation failures or compliance issues detected
-                    </p>
-                    <div className="mt-2">
-                      <Button size="sm" variant="outline" className="text-xs">
-                        Manage Rules
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          {/* Audit Trails Tab */}
-          <TabsContent value="audit" className="space-y-4">
-            <Card className="bg-cyber-gray border-cyber-darkgray">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="text-lg">Compliance Activity Logs</CardTitle>
-                    <CardDescription>
-                      Comprehensive record of all compliance-related activities
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="relative">
-                      <Search className="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-cyber-lightgray" />
-                      <Input className="pl-8 h-8" placeholder="Search logs..." />
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <Download className="h-4 w-4 mr-1" />
-                      Export
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader className="bg-cyber-darker">
-                    <TableRow>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Report</TableHead>
-                      <TableHead>User</TableHead>
-                      <TableHead>Timestamp</TableHead>
-                      <TableHead>IP Address</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {auditTrails.map((log) => (
-                      <TableRow key={log.id}>
-                        <TableCell>{log.action}</TableCell>
-                        <TableCell>{log.reportName}</TableCell>
-                        <TableCell>{log.user}</TableCell>
-                        <TableCell>{log.timestamp}</TableCell>
-                        <TableCell>{log.ipAddress}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-              <CardFooter className="flex justify-between pt-2 border-t border-cyber-darkgray">
-                <div className="text-xs text-cyber-lightgray">
-                  Showing 5 of 157 records
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" disabled>
-                    Previous
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    Next
-                  </Button>
-                </div>
-              </CardFooter>
-            </Card>
-            
-            <Card className="bg-cyber-gray border-cyber-darkgray">
-              <CardHeader>
-                <CardTitle className="text-lg">Audit Configuration</CardTitle>
-                <CardDescription>
-                  Configure audit logging retention and monitoring settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-cyber-darker p-4 rounded-md">
-                    <h3 className="text-sm font-medium mb-2">Log Retention</h3>
-                    <p className="text-xs text-cyber-lightgray">
-                      Audit logs are currently kept for 365 days
-                    </p>
-                  </div>
-                  
-                  <div className="bg-cyber-darker p-4 rounded-md">
-                    <h3 className="text-sm font-medium mb-2">Alerting</h3>
-                    <p className="text-xs text-cyber-lightgray">
-                      Alerts enabled for suspicious activity
-                    </p>
-                  </div>
-                  
-                  <div className="bg-cyber-darker p-4 rounded-md">
-                    <h3 className="text-sm font-medium mb-2">Integrity</h3>
-                    <p className="text-xs text-cyber-lightgray">
-                      Cryptographic verification enabled
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          {/* Evidence Collection Tab */}
-          <TabsContent value="evidence" className="space-y-4">
-            <div className="flex justify-end mb-4">
-              <Button 
-                className="bg-cyber-accent hover:bg-cyber-accent/90 text-white"
-                onClick={() => setShowEvidenceDialog(true)}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Evidence
-              </Button>
-            </div>
-            
-            <Card className="bg-cyber-gray border-cyber-darkgray">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="text-lg">Evidence Repository</CardTitle>
-                    <CardDescription>
-                      Manage collected evidence for compliance and audit purposes
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="relative">
-                      <Search className="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-cyber-lightgray" />
-                      <Input className="pl-8 h-8" placeholder="Search evidence..." />
-                    </div>
-                    <Select defaultValue="all">
-                      <SelectTrigger className="w-[130px] h-8">
-                        <SelectValue placeholder="Framework" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Frameworks</SelectItem>
-                        <SelectItem value="gdpr">GDPR</SelectItem>
-                        <SelectItem value="hipaa">HIPAA</SelectItem>
-                        <SelectItem value="soc2">SOC 2</SelectItem>
-                        <SelectItem value="iso27001">ISO 27001</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader className="bg-cyber-darker">
-                    <TableRow>
-                      <TableHead>Evidence Name</TableHead>
-                      <TableHead>Related Control</TableHead>
-                      <TableHead>Framework</TableHead>
-                      <TableHead>Date Collected</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {evidenceItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>{item.relatedControl}</TableCell>
-                        <TableCell>{item.framework}</TableCell>
-                        <TableCell>{item.dateCollected}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(item.status)}>
-                            {item.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <Button size="icon" variant="ghost">
-                            <Download className="h-4 w-4 text-cyber-accent" />
-                          </Button>
-                          <Button size="icon" variant="ghost">
-                            <Edit className="h-4 w-4 text-cyber-accent" />
-                          </Button>
-                          <Button size="icon" variant="ghost">
-                            <CheckCircle2 className="h-4 w-4 text-cyber-accent" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="bg-cyber-gray border-cyber-darkgray">
+
+          {/* Dashboard Tab */}
+          <TabsContent value="dashboard">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Overall Compliance Score */}
+              <Card className="bg-slate-800 border-slate-700">
                 <CardHeader>
-                  <CardTitle className="text-lg">Evidence by Framework</CardTitle>
+                  <CardTitle className="text-white flex items-center">
+                    <Shield className="h-5 w-5 mr-2" />
+                    Compliance Score
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-white mb-2">
+                      {currentAssessment?.overallScore || 0}%
+                    </div>
+                    <Badge className={getStatusColor(currentAssessment?.status || 'unknown')}>
+                      {currentAssessment?.status?.replace('-', ' ').toUpperCase() || 'UNKNOWN'}
+                    </Badge>
+                    <Progress 
+                      value={currentAssessment?.overallScore || 0} 
+                      className="mt-4"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Risk Score */}
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center">
+                    <AlertTriangle className="h-5 w-5 mr-2" />
+                    Risk Score
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-white mb-2">
+                      {currentAssessment?.riskScore || 0}/100
+                    </div>
+                    <div className="text-slate-400">
+                      {(currentAssessment?.riskScore || 0) < 30 ? 'Low Risk' : 
+                       (currentAssessment?.riskScore || 0) < 70 ? 'Medium Risk' : 'High Risk'}
+                    </div>
+                    <Progress 
+                      value={currentAssessment?.riskScore || 0} 
+                      className="mt-4"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Resource Summary */}
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center">
+                    <Server className="h-5 w-5 mr-2" />
+                    Infrastructure
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    <div className="bg-cyber-darker p-3 rounded-md">
-                      <div className="flex justify-between items-center">
-                        <span>GDPR</span>
-                        <Badge className="bg-cyber-accent">8 items</Badge>
-                      </div>
-                      <div className="w-full bg-cyber-gray h-2 mt-2 rounded-full">
-                        <div className="bg-cyber-accent h-2 rounded-full" style={{ width: '75%' }}></div>
-                      </div>
-                      <div className="text-xs text-cyber-lightgray mt-1">75% complete</div>
+                    <div className="flex justify-between text-white">
+                      <span>Total Resources</span>
+                      <span className="font-bold">{currentAssessment?.resourceSummary?.totalResources || 0}</span>
                     </div>
-                    
-                    <div className="bg-cyber-darker p-3 rounded-md">
-                      <div className="flex justify-between items-center">
-                        <span>HIPAA</span>
-                        <Badge className="bg-cyber-accent">12 items</Badge>
-                      </div>
-                      <div className="w-full bg-cyber-gray h-2 mt-2 rounded-full">
-                        <div className="bg-cyber-accent h-2 rounded-full" style={{ width: '90%' }}></div>
-                      </div>
-                      <div className="text-xs text-cyber-lightgray mt-1">90% complete</div>
+                    <div className="flex justify-between text-green-400">
+                      <span>Compliant</span>
+                      <span className="font-bold">{currentAssessment?.resourceSummary?.compliantResources || 0}</span>
                     </div>
-                    
-                    <div className="bg-cyber-darker p-3 rounded-md">
-                      <div className="flex justify-between items-center">
-                        <span>SOC 2</span>
-                        <Badge className="bg-cyber-accent">15 items</Badge>
-                      </div>
-                      <div className="w-full bg-cyber-gray h-2 mt-2 rounded-full">
-                        <div className="bg-cyber-accent h-2 rounded-full" style={{ width: '60%' }}></div>
-                      </div>
-                      <div className="text-xs text-cyber-lightgray mt-1">60% complete</div>
-                    </div>
-                    
-                    <div className="bg-cyber-darker p-3 rounded-md">
-                      <div className="flex justify-between items-center">
-                        <span>ISO 27001</span>
-                        <Badge className="bg-cyber-accent">10 items</Badge>
-                      </div>
-                      <div className="w-full bg-cyber-gray h-2 mt-2 rounded-full">
-                        <div className="bg-cyber-accent h-2 rounded-full" style={{ width: '80%' }}></div>
-                      </div>
-                      <div className="text-xs text-cyber-lightgray mt-1">80% complete</div>
+                    <div className="flex justify-between text-red-400">
+                      <span>Non-Compliant</span>
+                      <span className="font-bold">{currentAssessment?.resourceSummary?.nonCompliantResources || 0}</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              
-              <Card className="bg-cyber-gray border-cyber-darkgray">
+            </div>
+
+            {/* Controls Status Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <Card className="bg-slate-800 border-slate-700">
                 <CardHeader>
-                  <CardTitle className="text-lg">Evidence Verification</CardTitle>
+                  <CardTitle className="text-white">Control Status</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="bg-cyber-darker p-4 rounded-md">
-                      <h3 className="text-sm font-medium mb-2 flex items-center">
-                        <CheckCircle2 className="h-4 w-4 mr-2 text-cyber-accent" />
-                        Verification Process
-                      </h3>
-                      <p className="text-xs text-cyber-lightgray">
-                        All evidence is subject to a two-step verification process:
-                      </p>
-                      <ol className="list-decimal list-inside text-xs text-cyber-lightgray mt-2 space-y-1">
-                        <li>Initial review by security analyst</li>
-                        <li>Final verification by compliance officer</li>
-                      </ol>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        <span className="text-white">Compliant Controls</span>
+                      </div>
+                      <span className="text-2xl font-bold text-green-500">
+                        {currentAssessment?.compliantControls || 0}
+                      </span>
                     </div>
-                    
-                    <div className="bg-cyber-darker p-4 rounded-md">
-                      <h3 className="text-sm font-medium mb-2">Current Status</h3>
-                      <div className="flex flex-col space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs">Verified</span>
-                          <span className="text-xs font-medium">35</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                        <span className="text-white">Non-Compliant Controls</span>
+                      </div>
+                      <span className="text-2xl font-bold text-red-500">
+                        {currentAssessment?.nonCompliantControls || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Clock className="h-5 w-5 text-gray-500" />
+                        <span className="text-white">Not Applicable</span>
+                      </div>
+                      <span className="text-2xl font-bold text-gray-500">
+                        {currentAssessment?.notApplicableControls || 0}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">Resource Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {Object.entries(currentAssessment?.resourceSummary?.resourceBreakdown || {}).map(([type, count]) => (
+                      <div key={type} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          {getResourceIcon(type)}
+                          <span className="text-white capitalize">{type}</span>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs">Pending Review</span>
-                          <span className="text-xs font-medium">12</span>
+                        <span className="font-bold text-white">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Actions */}
+            <Card className="bg-slate-800 border-slate-700 mt-6">
+              <CardHeader>
+                <CardTitle className="text-white">Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex space-x-4">
+                  <Button 
+                    onClick={() => generateReport(selectedFramework)}
+                    disabled={loading}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Generate Report
+                  </Button>
+                  <Button 
+                    onClick={() => setActiveTab('assessment')}
+                    variant="outline"
+                    className="border-slate-600 text-white hover:bg-slate-700"
+                  >
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    View Findings
+                  </Button>
+                  <Button 
+                    onClick={() => setActiveTab('resources')}
+                    variant="outline"
+                    className="border-slate-600 text-white hover:bg-slate-700"
+                  >
+                    <Network className="h-4 w-4 mr-2" />
+                    Review Infrastructure
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Assessment Details Tab */}
+          <TabsContent value="assessment">
+            <div className="space-y-6">
+              {/* Executive Summary */}
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">Executive Summary</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Last updated: {formatDate(lastRefresh)}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="prose prose-invert max-w-none">
+                    <p className="text-slate-300 whitespace-pre-line">
+                      {currentAssessment?.assessment?.executiveSummary || 
+                       `This compliance assessment evaluated ${currentAssessment?.resourceSummary?.totalResources || 0} resources across your infrastructure against ${frameworks.find(f => f.id === selectedFramework)?.name} requirements.`}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Findings Table */}
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">Compliance Findings</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Detailed analysis of control assessments and violations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border border-slate-700">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-slate-700">
+                          <TableHead className="text-slate-300">Control</TableHead>
+                          <TableHead className="text-slate-300">Severity</TableHead>
+                          <TableHead className="text-slate-300">Status</TableHead>
+                          <TableHead className="text-slate-300">Affected Resources</TableHead>
+                          <TableHead className="text-slate-300">Estimated Effort</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(currentAssessment?.findings || []).map((finding) => (
+                          <TableRow key={finding.id} className="border-slate-700">
+                            <TableCell className="text-white">
+                              <div>
+                                <div className="font-medium">{finding.controlName}</div>
+                                <div className="text-sm text-slate-400">{finding.description}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                {getSeverityIcon(finding.severity)}
+                                <span className="text-white capitalize">{finding.severity}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={getStatusColor(finding.status)}>
+                                {finding.status.replace('-', ' ').toUpperCase()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-white">
+                              {finding.affectedResources.length}
+                            </TableCell>
+                            <TableCell className="text-white">
+                              {finding.estimatedEffort}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {(!currentAssessment?.findings || currentAssessment.findings.length === 0) && (
+                          <TableRow className="border-slate-700">
+                            <TableCell colSpan={5} className="text-center text-slate-400 py-8">
+                              No compliance findings available. Generate an assessment to see detailed results.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Recommendations */}
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">Recommendations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {(currentAssessment?.recommendations || []).map((rec) => (
+                      <div key={rec.id} className="border border-slate-700 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-white">{rec.title}</h4>
+                            <p className="text-sm text-slate-400 mt-1">{rec.description}</p>
+                          </div>
+                          <div className="flex items-center space-x-2 ml-4">
+                            <Badge variant="outline" className="border-slate-600 text-slate-300">
+                              {rec.priority}
+                            </Badge>
+                            <Badge variant="outline" className="border-slate-600 text-slate-300">
+                              {formatCurrency(rec.estimatedCost)}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs">Rejected</span>
-                          <span className="text-xs font-medium">3</span>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-400">
+                            Expected Impact: {rec.expectedImpact}
+                          </span>
+                          <span className="text-slate-400">
+                            Time: {rec.implementationTime}
+                          </span>
                         </div>
                       </div>
-                    </div>
+                    ))}
+                    {(!currentAssessment?.recommendations || currentAssessment.recommendations.length === 0) && (
+                      <div className="text-center text-slate-400 py-8">
+                        No recommendations available at this time.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Infrastructure Tab */}
+          <TabsContent value="resources">
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white">Connected Infrastructure</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Resources being monitored for compliance assessment
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border border-slate-700">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-slate-700">
+                        <TableHead className="text-slate-300">Resource</TableHead>
+                        <TableHead className="text-slate-300">Type</TableHead>
+                        <TableHead className="text-slate-300">Provider</TableHead>
+                        <TableHead className="text-slate-300">Region</TableHead>
+                        <TableHead className="text-slate-300">Status</TableHead>
+                        <TableHead className="text-slate-300">Compliance Score</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {networkResources.map((resource) => {
+                        const complianceChecks = Object.values(resource.compliance);
+                        const passedChecks = complianceChecks.filter(Boolean).length;
+                        const complianceScore = Math.round((passedChecks / complianceChecks.length) * 100);
+                        
+                        return (
+                          <TableRow key={resource.id} className="border-slate-700">
+                            <TableCell className="text-white">
+                              <div className="flex items-center space-x-2">
+                                {getResourceIcon(resource.type)}
+                                <div>
+                                  <div className="font-medium">{resource.name}</div>
+                                  <div className="text-sm text-slate-400">{resource.id}</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-white capitalize">{resource.type}</TableCell>
+                            <TableCell className="text-white uppercase">{resource.provider}</TableCell>
+                            <TableCell className="text-white">{resource.region}</TableCell>
+                            <TableCell>
+                              <Badge className={getStatusColor(resource.status)}>
+                                {resource.status.toUpperCase()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Progress value={complianceScore} className="w-16" />
+                                <span className="text-white text-sm">{complianceScore}%</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {networkResources.length === 0 && (
+                        <TableRow className="border-slate-700">
+                          <TableCell colSpan={6} className="text-center text-slate-400 py-8">
+                            No infrastructure resources found. Connect your cloud providers to see compliance data.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Reports Tab */}
+          <TabsContent value="reports">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Generated Reports</h3>
+                  <p className="text-slate-400">Download and manage compliance reports</p>
+                </div>
+                <Button 
+                  onClick={() => generateReport(selectedFramework)}
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Generate New Report
+                </Button>
+              </div>
+
+              <Card className="bg-slate-800 border-slate-700">
+                <CardContent className="p-6">
+                  <div className="rounded-md border border-slate-700">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-slate-700">
+                          <TableHead className="text-slate-300">Report Name</TableHead>
+                          <TableHead className="text-slate-300">Framework</TableHead>
+                          <TableHead className="text-slate-300">Generated</TableHead>
+                          <TableHead className="text-slate-300">Status</TableHead>
+                          <TableHead className="text-slate-300">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {complianceReports.map((report) => (
+                          <TableRow key={report.id} className="border-slate-700">
+                            <TableCell className="text-white">
+                              <div>
+                                <div className="font-medium">{report.reportName}</div>
+                                <div className="text-sm text-slate-400">ID: {report.id}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-white">{report.frameworkId.toUpperCase()}</TableCell>
+                            <TableCell className="text-white">{formatDate(report.generatedAt)}</TableCell>
+                            <TableCell>
+                              <Badge className={getStatusColor(report.metadata.approvalStatus)}>
+                                {report.metadata.approvalStatus.toUpperCase()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => downloadReport(report.id)}
+                                  className="border-slate-600 text-white hover:bg-slate-700"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {complianceReports.length === 0 && (
+                          <TableRow className="border-slate-700">
+                            <TableCell colSpan={5} className="text-center text-slate-400 py-8">
+                              No compliance reports generated yet. Click "Generate New Report" to create one.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
                 </CardContent>
               </Card>
@@ -852,219 +846,7 @@ const ComplianceReporting: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
-      
-      {/* Generate Report Dialog */}
-      <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
-        <DialogContent className="bg-cyber-gray text-white">
-          <DialogHeader>
-            <DialogTitle>Generate Compliance Report</DialogTitle>
-            <DialogDescription>
-              Create a new compliance report based on the selected template.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Report Name</label>
-              <Input 
-                placeholder="Enter report name"
-                defaultValue={selectedTemplate ? complianceTemplates.find(t => t.id === selectedTemplate)?.name || '' : ''}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Report Period</label>
-              <div className="flex space-x-2">
-                <Input type="date" className="w-full" />
-                <span className="flex items-center">to</span>
-                <Input type="date" className="w-full" />
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Include Sections</label>
-              <div className="bg-cyber-darker p-3 rounded-md max-h-40 overflow-y-auto">
-                {selectedTemplate && complianceTemplates.find(t => t.id === selectedTemplate)?.sections.map((section, index) => (
-                  <div key={index} className="flex items-center space-x-2 py-1">
-                    <input type="checkbox" id={`section-${index}`} defaultChecked className="rounded" />
-                    <label htmlFor={`section-${index}`} className="text-sm">{section}</label>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Output Format</label>
-              <Select defaultValue="pdf">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select format" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pdf">PDF Document</SelectItem>
-                  <SelectItem value="html">HTML Report</SelectItem>
-                  <SelectItem value="xlsx">Excel Spreadsheet</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReportDialog(false)}>
-              Cancel
-            </Button>
-            <Button className="bg-cyber-accent text-white" onClick={handleGenerateNow}>
-              Generate Now
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Schedule Report Dialog */}
-      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
-        <DialogContent className="bg-cyber-gray text-white">
-          <DialogHeader>
-            <DialogTitle>Schedule Compliance Report</DialogTitle>
-            <DialogDescription>
-              Set up automated generation of compliance reports.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Schedule Name</label>
-              <Input placeholder="Enter schedule name" />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Report Template</label>
-              <Select defaultValue={selectedTemplate?.toString() || "1"}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {complianceTemplates.map((template) => (
-                    <SelectItem key={template.id} value={template.id.toString()}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Frequency</label>
-              <Select defaultValue="monthly">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select frequency" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="quarterly">Quarterly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Recipients</label>
-              <Input placeholder="Enter email addresses (comma separated)" />
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <input type="checkbox" id="notify" className="rounded" />
-              <label htmlFor="notify" className="text-sm">Notify me when reports are generated</label>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowScheduleDialog(false)}>
-              Cancel
-            </Button>
-            <Button className="bg-cyber-accent text-white" onClick={handleScheduleReport}>
-              Schedule Report
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Add Evidence Dialog */}
-      <Dialog open={showEvidenceDialog} onOpenChange={setShowEvidenceDialog}>
-        <DialogContent className="bg-cyber-gray text-white">
-          <DialogHeader>
-            <DialogTitle>Add Evidence</DialogTitle>
-            <DialogDescription>
-              Upload and document evidence for compliance requirements.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Evidence Name</label>
-              <Input placeholder="Enter evidence name" />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <Textarea placeholder="Enter evidence description" />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Related Framework</label>
-              <Select defaultValue="gdpr">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select framework" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gdpr">GDPR</SelectItem>
-                  <SelectItem value="hipaa">HIPAA</SelectItem>
-                  <SelectItem value="soc2">SOC 2</SelectItem>
-                  <SelectItem value="iso27001">ISO 27001</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Related Control</label>
-              <Select defaultValue="access">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select control" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="access">Access Control</SelectItem>
-                  <SelectItem value="data">Data Protection</SelectItem>
-                  <SelectItem value="hr">Human Resources</SelectItem>
-                  <SelectItem value="incident">Incident Management</SelectItem>
-                  <SelectItem value="risk">Risk Assessment</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Evidence Files</label>
-              <div className="border-2 border-dashed border-cyber-darkgray rounded-md p-6 text-center">
-                <FolderArchive className="h-8 w-8 mx-auto mb-2 text-cyber-accent" />
-                <p className="text-sm text-cyber-lightgray">
-                  Drag and drop files here, or click to browse
-                </p>
-                <Button variant="outline" size="sm" className="mt-2">
-                  Upload Files
-                </Button>
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEvidenceDialog(false)}>
-              Cancel
-            </Button>
-            <Button className="bg-cyber-accent text-white" onClick={handleAddEvidence}>
-              Add Evidence
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </MainLayout>
+    </div>
   );
 };
 

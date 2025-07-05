@@ -1,6 +1,5 @@
 
 import React, { useState } from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import { 
   Tabs, 
   TabsContent, 
@@ -242,7 +241,6 @@ const InfoSecAudits: React.FC = () => {
   };
 
   return (
-    <MainLayout>
       <div className="flex flex-col space-y-4">
         <div className="flex items-center gap-2">
           <FileSearch className="h-6 w-6 text-cyber-accent" />
@@ -341,7 +339,6 @@ const InfoSecAudits: React.FC = () => {
           ))}
         </Tabs>
       </div>
-    </MainLayout>
   );
 };
 

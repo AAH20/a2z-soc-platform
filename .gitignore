@@ -22,3 +22,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Test results and logs
+test-results.log
+*.log
+*.tmp
+*.temp
+
+# Documentation builds
+docs/build/
+docs/_site/
+
+# IDE and editor files
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*

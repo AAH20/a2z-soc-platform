@@ -1,0 +1,270 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-deployment
+  namespace: a2z-soc-monitoring
+  labels:
+    app: prometheus
+    tier: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        tier: monitoring
+    spec:
+      serviceAccountName: prometheus-service-account
+      containers:
+      - name: prometheus
+        image: prom/prometheus:latest
+        ports:
+        - containerPort: 9090
+          name: prometheus
+        args:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.console.libraries=/etc/prometheus/console_libraries'
+        - '--web.console.templates=/etc/prometheus/consoles'
+        - '--storage.tsdb.retention.time=30d'
+        - '--web.enable-lifecycle'
+        - '--web.enable-admin-api'
+        - '--storage.tsdb.max-block-duration=2h'
+        - '--storage.tsdb.min-block-duration=2h'
+        volumeMounts:
+        - name: prometheus-config
+          mountPath: /etc/prometheus
+        - name: prometheus-storage
+          mountPath: /prometheus
+        - name: prometheus-rules
+          mountPath: /etc/prometheus/rules
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+      - name: prometheus-storage
+        persistentVolumeClaim:
+          claimName: prometheus-pvc
+      - name: prometheus-rules
+        configMap:
+          name: prometheus-rules
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: a2z-soc-monitoring
+  labels:
+    app: prometheus
+    tier: monitoring
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - name: prometheus
+    port: 9090
+    targetPort: 9090
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-pvc
+  namespace: a2z-soc-monitoring
+  labels:
+    app: prometheus
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: fast-ssd
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-deployment
+  namespace: a2z-soc-monitoring
+  labels:
+    app: grafana
+    tier: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+        tier: monitoring
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:latest
+        ports:
+        - containerPort: 3000
+          name: grafana
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: a2z-soc-secrets
+              key: GRAFANA_ADMIN_PASSWORD
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-clickhouse-datasource,grafana-piechart-panel,grafana-worldmap-panel"
+        - name: GF_SECURITY_ALLOW_EMBEDDING
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "false"
+        - name: GF_SMTP_ENABLED
+          value: "true"
+        - name: GF_SMTP_HOST
+          value: "smtp.gmail.com:587"
+        - name: GF_SMTP_USER
+          value: "alerts@a2z-soc.com"
+        - name: GF_SMTP_FROM_ADDRESS
+          value: "alerts@a2z-soc.com"
+        - name: GF_SMTP_FROM_NAME
+          value: "A2Z SOC Monitoring"
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-provisioning
+          mountPath: /etc/grafana/provisioning
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc
+      - name: grafana-provisioning
+        configMap:
+          name: grafana-provisioning
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: a2z-soc-monitoring
+  labels:
+    app: grafana
+    tier: monitoring
+spec:
+  selector:
+    app: grafana
+  ports:
+  - name: grafana
+    port: 3000
+    targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pvc
+  namespace: a2z-soc-monitoring
+  labels:
+    app: grafana
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: fast-ssd
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-service-account
+  namespace: a2z-soc-monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-cluster-role
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: prometheus-service-account
+  namespace: a2z-soc-monitoring 

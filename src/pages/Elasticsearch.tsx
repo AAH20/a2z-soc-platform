@@ -1,6 +1,5 @@
 
 import React from 'react';
-import MainLayout from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, CheckCircle2, Search, Database, Server, Shield, Code, BarChart3, Layers } from 'lucide-react';
@@ -19,7 +18,6 @@ const Elasticsearch = () => {
   };
   
   return (
-    <MainLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">Elasticsearch Stack</h1>
@@ -553,7 +551,6 @@ const Dashboard = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>
   );
 };
 

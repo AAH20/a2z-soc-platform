@@ -1,0 +1,23 @@
+{
+  "name": "a2z-endpoint-agent",
+  "version": "1.0.0",
+  "description": "A2Z SOC Endpoint Monitoring Agent",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "winston": "^3.11.0",
+    "dotenv": "^16.3.1",
+    "systeminformation": "^5.21.18",
+    "node-schedule": "^2.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "A2Z SOC Team",
+  "license": "MIT"
+} 

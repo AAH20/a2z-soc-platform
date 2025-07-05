@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,7 @@ import { Brain, RefreshCw, Save, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
-export type ModelType = 'gpt' | 'claude' | 'gemini' | 'security-copilot';
+export type ModelType = 'gpt' | 'claude' | 'gemini' | 'security-copilot' | 'deepseek';
 
 export interface ModelConfig {
   type: ModelType;

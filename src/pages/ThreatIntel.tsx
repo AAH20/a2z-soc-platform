@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import MainLayout from '@/components/layout/MainLayout';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -27,49 +26,116 @@ import {
   Clock,
   Cloud
 } from 'lucide-react';
+import { threatIntelligenceService } from '@/services/threatIntelligenceService';
+import FileUpload from '@/components/threat-intel/FileUpload';
+import ScanResults from '@/components/threat-intel/ScanResults';
 
 const ThreatIntel: React.FC = () => {
   const [activeTab, setActiveTab] = useState("virustotal");
   const [searchInput, setSearchInput] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any>(null);
+  const [searchType, setSearchType] = useState<'file' | 'url' | 'domain' | 'ip'>('domain');
+  const [apiHealth, setApiHealth] = useState<boolean | null>(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
 
-  // Mock search function for VirusTotal
-  const handleSearch = () => {
+  useEffect(() => {
+    checkApiHealth();
+  }, []);
+
+  const checkApiHealth = async () => {
+    setIsCheckingHealth(true);
+    try {
+      const response = await threatIntelligenceService.checkVirusTotalHealth();
+      setApiHealth(response.success);
+    } catch (error) {
+      setApiHealth(false);
+      console.error('API health check failed:', error);
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
+
+  // Detect search type based on input
+  useEffect(() => {
+    if (!searchInput) return;
+    
+    // Check if it's a file hash (MD5, SHA1, SHA256)
+    if (/^[a-fA-F0-9]{32}$/.test(searchInput) || /^[a-fA-F0-9]{40}$/.test(searchInput) || /^[a-fA-F0-9]{64}$/.test(searchInput)) {
+      setSearchType('file');
+      return;
+    }
+    
+    // Check if it's a URL
+    if (searchInput.startsWith('http') || searchInput.startsWith('www.') || /^[a-zA-Z0-9]+([\-\.]{1}[a-zA-Z0-9]+)*\.[a-zA-Z]{2,}(\/.*)?$/.test(searchInput)) {
+      setSearchType('url');
+      return;
+    }
+    
+    // Check if it's an IP address
+    if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(searchInput)) {
+      setSearchType('ip');
+      return;
+    }
+    
+    // Default to domain
+    setSearchType('domain');
+  }, [searchInput]);
+
+  const handleSearch = async () => {
     if (!searchInput.trim()) return;
     
     setIsSearching(true);
+    setSearchResults(null);
     
-    // Simulate API call with timeout
-    setTimeout(() => {
-      // Mock search results
-      setSearchResults({
-        resource: searchInput,
-        positives: 15,
-        total: 68,
-        scan_date: "2023-12-15 14:26:23",
-        permalink: "https://www.virustotal.com/gui/search/" + searchInput,
-        scans: {
-          "Kaspersky": { detected: true, result: "Trojan.Win32.Bublik.buwf" },
-          "McAfee": { detected: true, result: "RDN/Generic.dx!rkx" },
-          "Symantec": { detected: true, result: "Trojan.Gen.2" },
-          "Microsoft": { detected: true, result: "Trojan:Win32/Occamy.C" },
-          "Sophos": { detected: true, result: "Troj/Agent-AIRO" },
-          "ESET-NOD32": { detected: true, result: "Win32/TrojanDownloader.Bublik.ABWQ" },
-          "Avast": { detected: true, result: "Win32:Malware-gen" },
-          "Malwarebytes": { detected: false, result: null },
-          "TrendMicro": { detected: true, result: "TROJ_GEN.R002C0OJJ19" },
-          "BitDefender": { detected: true, result: "Trojan.GenericKD.30066573" }
-        },
-        classification: "malicious"
-      });
+    try {
+      let response;
       
+      switch (searchType) {
+        case 'file':
+          response = await threatIntelligenceService.getFileReport(searchInput);
+          break;
+        case 'url':
+          response = await threatIntelligenceService.getUrlReport(searchInput);
+          break;
+        case 'ip':
+          response = await threatIntelligenceService.getIpReport(searchInput);
+          break;
+        case 'domain':
+          response = await threatIntelligenceService.getDomainReport(searchInput);
+          break;
+      }
+      
+      setSearchResults(response);
+    } catch (error) {
+      console.error('Search failed:', error);
+      setSearchResults({
+        success: false,
+        data: null,
+        timestamp: new Date().toISOString(),
+        error: 'Failed to fetch results'
+      });
+    } finally {
       setIsSearching(false);
-    }, 1500);
+    }
+  };
+
+  const handleFileUploadComplete = (result: any) => {
+    // Make sure to set the search type to 'file' for uploaded files
+    setSearchType('file');
+    
+    // Log the response for debugging
+    console.log('File upload completed with result:', JSON.stringify(result, null, 2));
+    
+    // Ensure the response is structured correctly
+    setSearchResults({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    });
   };
 
   return (
-    <MainLayout>
       <div className="px-2">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -77,8 +143,13 @@ const ThreatIntel: React.FC = () => {
             <p className="text-gray-400">Integrated threat intelligence from Google's security ecosystem</p>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline" className="border-cyber-accent text-cyber-accent hover:bg-cyber-accent/20">
-              <RefreshCcw className="h-4 w-4 mr-2" />
+            <Button 
+              variant="outline" 
+              className="border-cyber-accent text-cyber-accent hover:bg-cyber-accent/20"
+              onClick={checkApiHealth}
+              disabled={isCheckingHealth}
+            >
+              <RefreshCcw className={`h-4 w-4 mr-2 ${isCheckingHealth ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
             <Button className="bg-cyber-accent hover:bg-cyber-accent/80">
@@ -113,7 +184,9 @@ const ThreatIntel: React.FC = () => {
                     <Shield className="h-5 w-5 text-cyber-accent" />
                     <CardTitle className="text-lg font-medium text-white">VirusTotal API Integration</CardTitle>
                   </div>
-                  <Badge className="bg-cyber-success">Connected</Badge>
+                  <Badge className={apiHealth === null ? "bg-cyber-warning" : apiHealth ? "bg-cyber-success" : "bg-cyber-danger"}>
+                    {apiHealth === null ? "Checking..." : apiHealth ? "Connected" : "Disconnected"}
+                  </Badge>
                 </div>
                 <CardDescription className="text-gray-400">
                   Search for file hashes, URLs, domains, or IP addresses
@@ -130,7 +203,7 @@ const ThreatIntel: React.FC = () => {
                     />
                     <Button 
                       onClick={handleSearch}
-                      disabled={isSearching || !searchInput.trim()} 
+                      disabled={isSearching || !searchInput.trim() || !apiHealth} 
                       className="bg-cyber-accent hover:bg-cyber-accent/80"
                     >
                       {isSearching ? (
@@ -152,77 +225,17 @@ const ThreatIntel: React.FC = () => {
                   </div>
                 </div>
 
-                {searchResults && (
-                  <div className="mt-4 bg-cyber-darker p-4 rounded-md border border-cyber-lightgray">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-lg font-medium text-white">{searchResults.resource}</h3>
-                        <div className="flex items-center text-xs text-gray-400 mt-1">
-                          <Clock className="h-3 w-3 mr-1" />
-                          <span>Scanned on {searchResults.scan_date}</span>
-                        </div>
-                      </div>
-                      <Badge className={
-                        searchResults.classification === "clean" ? "bg-cyber-success" :
-                        searchResults.classification === "suspicious" ? "bg-cyber-warning" :
-                        "bg-cyber-danger"
-                      }>
-                        {searchResults.classification.toUpperCase()}
-                      </Badge>
-                    </div>
-                    
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-300">Detection Rate</span>
-                        <span className="text-sm text-white">
-                          {searchResults.positives}/{searchResults.total} engines
-                        </span>
-                      </div>
-                      <div className="h-2 bg-cyber-gray rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full ${
-                            searchResults.positives / searchResults.total < 0.2 ? "bg-cyber-success" :
-                            searchResults.positives / searchResults.total < 0.5 ? "bg-cyber-warning" :
-                            "bg-cyber-danger"
-                          }`}
-                          style={{ width: `${(searchResults.positives / searchResults.total) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-white mb-2">Engine Results</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {Object.entries(searchResults.scans).map(([engine, data]: [string, any]) => (
-                          <div key={engine} className="flex items-center justify-between p-2 bg-cyber-gray rounded-md">
-                            <div className="flex items-center">
-                              {data.detected ? (
-                                <AlertTriangle className="h-4 w-4 text-cyber-danger mr-2" />
-                              ) : (
-                                <CheckCircle2 className="h-4 w-4 text-cyber-success mr-2" />
-                              )}
-                              <span className="text-sm text-white">{engine}</span>
-                            </div>
-                            <span className="text-xs text-gray-300 truncate max-w-32">
-                              {data.detected ? data.result : "Clean"}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-end">
-                      <Button 
-                        variant="outline" 
-                        className="text-cyber-accent border-cyber-accent hover:bg-cyber-accent/10"
-                        onClick={() => window.open(searchResults.permalink, "_blank")}
-                      >
-                        <LinkIcon className="h-4 w-4 mr-2" />
-                        View Full Report
-                      </Button>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="col-span-1">
+                    <FileUpload onUploadComplete={handleFileUploadComplete} />
                   </div>
-                )}
+                  
+                  {searchResults && (
+                    <div className="col-span-1">
+                      <ScanResults results={searchResults} type={searchType} />
+                    </div>
+                  )}
+                </div>
                 
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-cyber-darker p-3 rounded-md">
@@ -353,7 +366,7 @@ const ThreatIntel: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
+                <div className="space-y-6 bg-slate-900 min-h-screen p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-cyber-darker p-4 rounded-md flex flex-col">
                       <div className="flex items-center justify-between mb-2">
@@ -523,7 +536,6 @@ const ThreatIntel: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>
   );
 };
 

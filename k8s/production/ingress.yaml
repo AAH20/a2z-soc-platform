@@ -1,0 +1,109 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: a2z-soc-ingress
+  namespace: a2z-soc-production
+  labels:
+    app: a2z-soc
+    component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/client-max-body-size: "100m"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+      }
+      location /api/health {
+        access_log off;
+      }
+spec:
+  tls:
+  - hosts:
+    - app.a2zsoc.com
+    - api.a2zsoc.com
+    - dashboard.a2zsoc.com
+    secretName: a2z-soc-tls
+  rules:
+  - host: app.a2zsoc.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: a2z-soc-frontend-service
+            port:
+              number: 80
+  - host: api.a2zsoc.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: a2z-soc-api-service
+            port:
+              number: 80
+  - host: dashboard.a2zsoc.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: a2z-soc-monitoring-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: a2z-soc-network-policy
+  namespace: a2z-soc-production
+spec:
+  podSelector:
+    matchLabels:
+      app: a2z-soc-api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nginx-ingress
+    - podSelector:
+        matchLabels:
+          app: a2z-soc-frontend
+    ports:
+    - protocol: TCP
+      port: 3001
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis
+    - protocol: TCP
+      port: 9200  # Elasticsearch
+  - to: []  # Allow all outbound for external APIs
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80 
