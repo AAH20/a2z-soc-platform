@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   a2z-soc:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     image: a2z-soc:cross-platform
@@ -10,6 +10,7 @@ services:
     restart: unless-stopped
     ports:
       - "5173:5173"     # Frontend (React dev server - main access point)
+      - "8080:8080"     # Frontend (Built files served by Python HTTP server)
       - "3001:3001"     # API Server (direct access)
       - "5200:5200"     # Network Agent (monitoring interface)
       - "5432:5432"     # PostgreSQL (database access)
@@ -40,12 +41,16 @@ services:
       # Cross-platform compatibility flags
       - PLATFORM=docker
       - DOCKER_BUILDKIT=1
+      - DATABASE_URL=postgresql://postgres@localhost:5432/a2z_soc
+      - REDIS_URL=redis://localhost:6379/0
+      - JWT_SECRET=a2z-soc-jwt-secret-2025-secure
+      - ENABLE_API_DOCS=true
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
-      timeout: 15s
-      start_period: 120s
+      timeout: 10s
       retries: 3
+      start_period: 40s
     # Resource limits for cross-platform performance
     deploy:
       resources:

@@ -1,6 +1,7 @@
 const EventEmitter = require('events');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
+const { Pool } = require('pg');
 const PacketAnalyzer = require('./PacketAnalyzer');
 const ThreatDetector = require('./ThreatDetector');
 const DataCompressor = require('../utils/DataCompressor');
@@ -32,6 +33,15 @@ class NetworkAgent extends EventEmitter {
         this.isRunning = false;
         this.startTime = null;
         
+        // Database connection
+        this.pool = new Pool({
+            user: process.env.DB_USER || 'postgres',
+            host: process.env.DB_HOST || 'localhost',
+            database: process.env.DB_NAME || 'a2z_soc',
+            password: process.env.DB_PASSWORD || 'postgres',
+            port: process.env.DB_PORT || 5432,
+        });
+        
         // Core components
         this.packetAnalyzer = new PacketAnalyzer(config);
         this.threatDetector = new ThreatDetector(config);
@@ -48,47 +58,344 @@ class NetworkAgent extends EventEmitter {
         // Log collector (platform-specific)
         if (LogCollector && config.logCollection?.enabled) {
             this.logCollector = new LogCollector(config.logCollection);
-        } else {
-            this.logCollector = null;
         }
         
-        // Store reference to config manager if provided
-        this.configManager = null;
+        // Agent state
+        this.agentId = config.agentId || uuidv4();
+        this.agentVersion = config.version || '1.0.0';
+        this.lastHeartbeat = null;
+        this.metrics = {
+            packetsProcessed: 0,
+            threatsDetected: 0,
+            alertsGenerated: 0,
+            bytesTransferred: 0,
+            uptime: 0
+        };
         
-        // Network interfaces and capture
-        this.interfaces = [];
-        this.activeCaptures = new Map();
+        // Initialize database connection
+        this.initializeDatabase();
         
-        // Data buffers
-        this.eventBuffer = [];
-        this.alertBuffer = [];
-        this.logBuffer = [];
-        this.maxBufferSize = config.maxBufferSize || 1000;
-        
-        // Performance tracking
-        this.packetsProcessed = 0;
-        this.threatsDetected = 0;
-        this.alertsGenerated = 0;
-        this.logsCollected = 0;
-        
-        // Heartbeat
-        this.heartbeatInterval = null;
-        
-        // macOS-specific privilege check
-        this.privilegeLevel = this.checkPrivileges();
+        // Setup event handlers
+        this.setupEventHandlers();
     }
 
-    // Add method to set config manager reference
-    setConfigManager(configManager) {
-        this.configManager = configManager;
-    }
-
-    checkPrivileges() {
-        if (process.platform === 'darwin') {
-            // Check if running as root on macOS
-            return process.getuid && process.getuid() === 0;
+    async initializeDatabase() {
+        try {
+            // Test database connection
+            await this.pool.query('SELECT 1');
+            console.log('✅ Database connection established');
+            
+            // Register or update agent in database
+            await this.registerAgent();
+            
+        } catch (error) {
+            console.error('❌ Database connection failed:', error.message);
+            // Continue without database for now
         }
-        return false;
+    }
+
+    async registerAgent() {
+        try {
+            const agentData = {
+                agent_id: this.agentId,
+                name: this.config.name || `Network Agent ${this.agentId.slice(0, 8)}`,
+                type: 'network-agent',
+                version: this.agentVersion,
+                platform: process.platform,
+                hostname: require('os').hostname(),
+                ip_address: await this.getLocalIP(),
+                status: 'active',
+                configuration: this.config,
+                last_heartbeat: new Date(),
+                created_at: new Date(),
+                updated_at: new Date()
+            };
+
+            const query = `
+                INSERT INTO network_agents (
+                    agent_id, name, type, version, platform, hostname, 
+                    ip_address, status, configuration, last_heartbeat, 
+                    created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                ON CONFLICT (agent_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    version = EXCLUDED.version,
+                    platform = EXCLUDED.platform,
+                    hostname = EXCLUDED.hostname,
+                    ip_address = EXCLUDED.ip_address,
+                    status = EXCLUDED.status,
+                    configuration = EXCLUDED.configuration,
+                    last_heartbeat = EXCLUDED.last_heartbeat,
+                    updated_at = EXCLUDED.updated_at
+                RETURNING *
+            `;
+
+            const values = [
+                agentData.agent_id,
+                agentData.name,
+                agentData.type,
+                agentData.version,
+                agentData.platform,
+                agentData.hostname,
+                agentData.ip_address,
+                agentData.status,
+                agentData.configuration,
+                agentData.last_heartbeat,
+                agentData.created_at,
+                agentData.updated_at
+            ];
+
+            const result = await this.pool.query(query, values);
+            console.log(`✅ Agent registered in database: ${this.agentId}`);
+            
+        } catch (error) {
+            console.error('❌ Failed to register agent:', error.message);
+        }
+    }
+
+    async getLocalIP() {
+        try {
+            const networkInterfaces = await si.networkInterfaces();
+            const activeInterface = networkInterfaces.find(iface => 
+                iface.ip4 && !iface.internal && iface.operstate === 'up'
+            );
+            return activeInterface ? activeInterface.ip4 : '127.0.0.1';
+        } catch (error) {
+            return '127.0.0.1';
+        }
+    }
+
+    async storeNetworkEvent(eventData) {
+        try {
+            const query = `
+                INSERT INTO network_events (
+                    agent_id, event_type, timestamp, source_ip, destination_ip,
+                    source_port, destination_port, protocol, packet_size,
+                    threat_level, event_data, created_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                RETURNING id
+            `;
+
+            const values = [
+                this.agentId,
+                eventData.type || 'network_activity',
+                eventData.timestamp || new Date(),
+                eventData.sourceIP,
+                eventData.destinationIP,
+                eventData.sourcePort,
+                eventData.destinationPort,
+                eventData.protocol,
+                eventData.packetSize,
+                eventData.threatLevel || 'low',
+                eventData,
+                new Date()
+            ];
+
+            const result = await this.pool.query(query, values);
+            return result.rows[0].id;
+            
+        } catch (error) {
+            console.error('Failed to store network event:', error.message);
+            return null;
+        }
+    }
+
+    async updateHeartbeat() {
+        try {
+            const query = `
+                UPDATE network_agents 
+                SET last_heartbeat = $1, 
+                    status = $2,
+                    metrics = $3,
+                    updated_at = $4
+                WHERE agent_id = $5
+            `;
+
+            const values = [
+                new Date(),
+                'active',
+                this.metrics,
+                new Date(),
+                this.agentId
+            ];
+
+            await this.pool.query(query, values);
+            this.lastHeartbeat = new Date();
+            
+        } catch (error) {
+            console.error('Failed to update heartbeat:', error.message);
+        }
+    }
+
+    setupEventHandlers() {
+        // Network monitoring events
+        this.networkMonitor.on('packet', (packet) => {
+            this.handlePacket(packet);
+        });
+
+        this.networkMonitor.on('connection', (connection) => {
+            this.handleConnection(connection);
+        });
+
+        // Threat detection events
+        this.threatDetector.on('threat', (threat) => {
+            this.handleThreat(threat);
+        });
+
+        // Log collection events
+        if (this.logCollector) {
+            this.logCollector.on('log', (log) => {
+                this.handleLog(log);
+            });
+        }
+
+        // Metrics collection
+        this.metricsCollector.on('metrics', (metrics) => {
+            this.handleMetrics(metrics);
+        });
+    }
+
+    async handlePacket(packet) {
+        try {
+            this.metrics.packetsProcessed++;
+            this.metrics.bytesTransferred += packet.size || 0;
+
+            // Analyze packet
+            const analysis = await this.packetAnalyzer.analyze(packet);
+            
+            // Check for threats
+            const threatResult = await this.threatDetector.analyze(packet, analysis);
+            
+            if (threatResult.isThreat) {
+                this.metrics.threatsDetected++;
+                await this.handleThreat(threatResult);
+            }
+
+            // Store network event in database
+            await this.storeNetworkEvent({
+                type: 'packet',
+                timestamp: new Date(),
+                sourceIP: packet.sourceIP,
+                destinationIP: packet.destinationIP,
+                sourcePort: packet.sourcePort,
+                destinationPort: packet.destinationPort,
+                protocol: packet.protocol,
+                packetSize: packet.size,
+                threatLevel: threatResult.isThreat ? threatResult.level : 'low',
+                analysis: analysis,
+                threat: threatResult.isThreat ? threatResult : null
+            });
+
+            // Emit event for real-time monitoring
+            this.emit('packet', {
+                packet,
+                analysis,
+                threat: threatResult.isThreat ? threatResult : null
+            });
+
+        } catch (error) {
+            console.error('Error handling packet:', error);
+        }
+    }
+
+    async handleConnection(connection) {
+        try {
+            // Store connection event
+            await this.storeNetworkEvent({
+                type: 'connection',
+                timestamp: new Date(),
+                sourceIP: connection.localAddress,
+                destinationIP: connection.remoteAddress,
+                sourcePort: connection.localPort,
+                destinationPort: connection.remotePort,
+                protocol: connection.protocol,
+                state: connection.state,
+                threatLevel: 'low'
+            });
+
+            this.emit('connection', connection);
+            
+        } catch (error) {
+            console.error('Error handling connection:', error);
+        }
+    }
+
+    async handleThreat(threat) {
+        try {
+            this.metrics.alertsGenerated++;
+
+            // Store threat in database
+            const query = `
+                INSERT INTO security_events (
+                    agent_id, event_type, severity, title, description,
+                    source_ip, destination_ip, indicators, raw_data,
+                    created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                RETURNING id
+            `;
+
+            const values = [
+                this.agentId,
+                'threat_detected',
+                threat.severity || 'medium',
+                threat.title || 'Network Threat Detected',
+                threat.description || 'Suspicious network activity detected',
+                threat.sourceIP,
+                threat.destinationIP,
+                threat.indicators || {},
+                threat,
+                new Date(),
+                new Date()
+            ];
+
+            const result = await this.pool.query(query, values);
+            
+            // Send to cloud if connected
+            if (this.cloudConnection && this.cloudConnection.isConnected()) {
+                await this.cloudConnection.sendThreat(threat);
+            }
+
+            this.emit('threat', threat);
+            
+        } catch (error) {
+            console.error('Error handling threat:', error);
+        }
+    }
+
+    async handleLog(log) {
+        try {
+            // Store log in database
+            await this.storeNetworkEvent({
+                type: 'log',
+                timestamp: log.timestamp || new Date(),
+                sourceIP: log.sourceIP,
+                message: log.message,
+                level: log.level,
+                threatLevel: log.threatLevel || 'low',
+                logData: log
+            });
+
+            this.emit('log', log);
+            
+        } catch (error) {
+            console.error('Error handling log:', error);
+        }
+    }
+
+    async handleMetrics(metrics) {
+        try {
+            // Update internal metrics
+            Object.assign(this.metrics, metrics);
+            this.metrics.uptime = process.uptime();
+
+            // Update heartbeat with metrics
+            await this.updateHeartbeat();
+
+            this.emit('metrics', this.metrics);
+            
+        } catch (error) {
+            console.error('Error handling metrics:', error);
+        }
     }
 
     async initialize() {
@@ -319,56 +626,12 @@ class NetworkAgent extends EventEmitter {
         return preferred || this.interfaces[0];
     }
 
-    async handlePacket(packet) {
-        try {
-            this.packetsProcessed++;
-            
-            // Analyze packet with packet analyzer
-            const analysis = await this.packetAnalyzer.analyze(packet);
-            
-            // Check for threats
-            const threats = await this.threatDetector.analyzePacket(packet, analysis);
-            
-            if (threats && threats.length > 0) {
-                this.threatsDetected++;
-                
-                // Create security event
-                const securityEvent = this.createSecurityEvent(packet, threats);
-                this.bufferEvent(securityEvent);
-                
-                // Generate alert if needed
-                await this.generateAlert(threats[0], packet);
-            }
-            
-        } catch (error) {
-            console.error('Error handling packet:', error);
+    checkPrivileges() {
+        if (process.platform === 'darwin') {
+            // Check if running as root on macOS
+            return process.getuid && process.getuid() === 0;
         }
-    }
-
-    async handleConnection(connection) {
-        try {
-            // Analyze connection for threats
-            const threats = await this.threatDetector.analyzeConnection(connection);
-            
-            if (threats && threats.length > 0) {
-                this.threatsDetected++;
-                
-                // Create connection event
-                const connectionEvent = this.createConnectionEvent(connection, threats);
-                this.bufferEvent(connectionEvent);
-                
-                // Generate alert if needed
-                await this.generateAlert(threats[0], connection);
-            }
-            
-        } catch (error) {
-            console.error('Error handling connection:', error);
-        }
-    }
-
-    handleMonitorError(error) {
-        console.error('Network monitor error:', error);
-        this.emit('monitor-error', error);
+        return false;
     }
 
     createSecurityEvent(packet, threats = []) {
@@ -622,15 +885,6 @@ class NetworkAgent extends EventEmitter {
         setInterval(() => {
             this.flushBuffers();
         }, this.config.transmissionInterval || 60000);
-    }
-
-    setupEventHandlers() {
-        // Setup internal event handlers
-        this.on('packet', this.handlePacket.bind(this));
-        this.on('connection', this.handleConnection.bind(this));
-        this.on('error', (error) => {
-            console.error('Agent error:', error);
-        });
     }
 
     setupLogCollectorEvents() {

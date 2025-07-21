@@ -278,13 +278,39 @@ curl http://localhost:5200/status
 
 ---
 
+## 🤝 Contributing
+
+We welcome contributions from the cybersecurity community! A2Z SOC is now open source and available for collaboration.
+
+### How to Contribute
+- **🐛 Bug Reports**: Found an issue? Please report it on our GitHub issues
+- **💡 Feature Requests**: Have an idea? We'd love to hear it
+- **🔧 Code Contributions**: Submit pull requests for improvements
+- **📚 Documentation**: Help improve our guides and documentation
+- **🧪 Testing**: Help test new features and report feedback
+
+### Development Guidelines
+- Follow our coding standards and best practices
+- Include tests for new features
+- Update documentation when needed
+- Ensure all CI/CD checks pass
+
+### Community
+- **Website**: [cloudsecpath.vercel.app](https://cloudsecpath.vercel.app)
+- **GitHub**: [github.com/a2z-soc](https://github.com/a2z-soc)
+- **Discussions**: Join our community discussions
+- **Documentation**: Comprehensive guides and API docs
+
+---
+
 ## 📞 Contact & Support
 
-- **Website**: [a2zsoc.com](https://a2zsoc.com)
-- **Documentation**: [docs.a2zsoc.com](https://docs.a2zsoc.com)
-- **Enterprise Sales**: enterprise@a2zsoc.com
-- **Technical Support**: support@a2zsoc.com
-- **Investment Inquiries**: investors@a2zsoc.com
+- **Website**: [cloudsecpath.vercel.app](https://cloudsecpath.vercel.app)
+- **Documentation**: [cloudsecpath.vercel.app/docs](https://cloudsecpath.vercel.app/docs)
+- **Enterprise Sales**: enterprise@cloudsecpath.com
+- **Technical Support**: support@cloudsecpath.com
+- **Investment Inquiries**: investors@cloudsecpath.com
+- **Community**: [cloudsecpath.vercel.app/community](https://cloudsecpath.vercel.app/community)
 
 ---
 

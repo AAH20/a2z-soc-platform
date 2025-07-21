@@ -9,13 +9,16 @@ use tokio::sync::Mutex;
 use signal_hook::{consts::SIGTERM};
 use signal_hook_tokio::Signals as AsyncSignals;
 use futures_util::StreamExt;
+use uuid::Uuid;
 
 mod network;
 mod detection;
 mod macos_support;
+mod database;
 
 use network::{PacketCapture, PacketStats};
 use detection::ThreatDetector;
+use database::{DatabaseConnection, DetectionEvent, SecurityEvent};
 
 #[cfg(target_os = "macos")]
 use macos_support::MacOSNetworkHandler;
@@ -50,55 +53,292 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn init_logging() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "a2z_ids=info,warn".into())
-        )
-        .with_target(false)
-        .with_thread_ids(true)
-        .with_level(true)
-        .init();
+async fn start_system(matches: &ArgMatches) -> Result<()> {
+    info!("🚀 Starting A2Z IDS/IPS Core Engine");
     
-    info!("🚀 A2Z IDS/IPS Core Engine Starting...");
+    // Initialize database connection
+    let db = match DatabaseConnection::new().await {
+        Ok(db) => {
+            info!("✅ Database connection established");
+            Some(Arc::new(db))
+        },
+        Err(e) => {
+            warn!("⚠️  Database connection failed: {}, continuing without database", e);
+            None
+        }
+    };
+    
+    // Generate agent ID
+    let agent_id = Uuid::new_v4().to_string();
+    info!("🔧 Agent ID: {}", agent_id);
+    
+    // Update agent status in database
+    if let Some(ref db) = db {
+        if let Err(e) = db.update_agent_status(&agent_id, "starting").await {
+            warn!("Failed to update agent status: {}", e);
+        }
+    }
+    
+    // Get interface name from arguments
+    let interface_name = matches.get_one::<String>("interface")
+        .map(|s| s.as_str())
+        .unwrap_or("auto");
+    
+    // Find network interface
+    let interface = if interface_name == "auto" {
+        find_default_interface()?
+    } else {
+        find_interface_by_name(interface_name)?
+    };
+    
+    info!("📡 Using network interface: {}", interface.name);
+    
+    // Initialize packet capture
+    let packet_capture = Arc::new(Mutex::new(PacketCapture::new(interface)?));
+    
+    // Initialize threat detector
+    let threat_detector = Arc::new(ThreatDetector::new().await?);
+    
+    // Load detection rules from database
+    if let Some(ref db) = db {
+        match db.get_detection_rules().await {
+            Ok(rules) => {
+                info!("📋 Loaded {} detection rules from database", rules.len());
+                // TODO: Load rules into threat detector
+            },
+            Err(e) => {
+                warn!("Failed to load detection rules: {}", e);
+            }
+        }
+    }
+    
+    // Statistics tracking
+    let stats = Arc::new(Mutex::new(PacketStats::new()));
+    
+    // Update agent status to active
+    if let Some(ref db) = db {
+        if let Err(e) = db.update_agent_status(&agent_id, "active").await {
+            warn!("Failed to update agent status: {}", e);
+        }
+    }
+    
+    // Setup signal handling for graceful shutdown
+    let mut signals = AsyncSignals::new([SIGTERM])?;
+    let signals_handle = signals.handle();
+    
+    // Spawn signal handler
+    let db_clone = db.clone();
+    let agent_id_clone = agent_id.clone();
+    tokio::spawn(async move {
+        if let Some(signal) = signals.next().await {
+            info!("🛑 Received signal {}, shutting down gracefully", signal);
+            
+            // Update agent status to stopped
+            if let Some(ref db) = db_clone {
+                if let Err(e) = db.update_agent_status(&agent_id_clone, "stopped").await {
+                    warn!("Failed to update agent status: {}", e);
+                }
+            }
+            
+            std::process::exit(0);
+        }
+    });
+    
+    // Main packet processing loop
+    info!("🔍 Starting packet capture and analysis");
+    
+    loop {
+        // Capture packets
+        let mut capture = packet_capture.lock().await;
+        
+        match capture.next_packet().await {
+            Ok(Some(packet)) => {
+                // Update statistics
+                {
+                    let mut stats = stats.lock().await;
+                    stats.packets_processed += 1;
+                    stats.bytes_processed += packet.data.len() as u64;
+                }
+                
+                // Analyze packet for threats
+                let threat_result = threat_detector.analyze_packet(&packet).await;
+                
+                if let Ok(Some(threat)) = threat_result {
+                    // Create detection event
+                    let detection_event = DetectionEvent {
+                        agent_id: agent_id.clone(),
+                        event_type: "threat_detected".to_string(),
+                        severity: threat.severity.clone(),
+                        source_ip: threat.source_ip.clone(),
+                        destination_ip: threat.destination_ip.clone(),
+                        source_port: threat.source_port,
+                        destination_port: threat.destination_port,
+                        protocol: threat.protocol.clone(),
+                        signature_id: threat.signature_id.clone(),
+                        rule_name: threat.rule_name.clone(),
+                        message: threat.description.clone(),
+                        packet_data: Some(serde_json::to_value(&packet).unwrap_or_default()),
+                        created_at: chrono::Utc::now(),
+                        updated_at: chrono::Utc::now(),
+                    };
+                    
+                    // Store in database
+                    if let Some(ref db) = db {
+                        if let Err(e) = db.store_detection_event(&detection_event).await {
+                            error!("Failed to store detection event: {}", e);
+                        } else {
+                            info!("🚨 Threat detected and stored: {}", threat.description);
+                        }
+                    }
+                    
+                    // Create security event for high severity threats
+                    if threat.severity == "high" || threat.severity == "critical" {
+                        let security_event = SecurityEvent {
+                            agent_id: agent_id.clone(),
+                            event_type: "security_alert".to_string(),
+                            severity: threat.severity.clone(),
+                            title: format!("IDS/IPS Alert: {}", threat.rule_name.unwrap_or("Unknown".to_string())),
+                            description: threat.description.clone(),
+                            source_ip: threat.source_ip.clone(),
+                            destination_ip: threat.destination_ip.clone(),
+                            indicators: Some(serde_json::to_value(&threat).unwrap_or_default()),
+                            raw_data: Some(serde_json::to_value(&packet).unwrap_or_default()),
+                            created_at: chrono::Utc::now(),
+                            updated_at: chrono::Utc::now(),
+                        };
+                        
+                        if let Some(ref db) = db {
+                            if let Err(e) = db.store_security_event(&security_event).await {
+                                error!("Failed to store security event: {}", e);
+                            }
+                        }
+                    }
+                    
+                    // Update statistics
+                    {
+                        let mut stats = stats.lock().await;
+                        stats.threats_detected += 1;
+                    }
+                }
+            }
+            Ok(None) => {
+                // No packet available, sleep briefly
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            Err(e) => {
+                error!("Packet capture error: {}", e);
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }
+        
+        // Print statistics every 10000 packets
+        {
+            let stats = stats.lock().await;
+            if stats.packets_processed % 10000 == 0 && stats.packets_processed > 0 {
+                info!("📊 Processed {} packets, {} threats detected", 
+                      stats.packets_processed, stats.threats_detected);
+            }
+        }
+    }
+}
+
+async fn stop_system() -> Result<()> {
+    info!("🛑 Stopping A2Z IDS/IPS Core Engine");
+    
+    // TODO: Implement graceful shutdown
+    // - Stop packet capture
+    // - Save current state
+    // - Close database connections
+    // - Update agent status to stopped
+    
+    Ok(())
+}
+
+async fn show_status() -> Result<()> {
+    info!("📊 A2Z IDS/IPS Status Check");
+    
+    // Connect to database and get recent events
+    if let Ok(db) = DatabaseConnection::new().await {
+        match db.get_recent_events(10).await {
+            Ok(events) => {
+                println!("Recent Events (last 10):");
+                for event in events {
+                    println!("  {} - {} [{}] {}", 
+                             event.created_at.format("%Y-%m-%d %H:%M:%S"),
+                             event.event_type,
+                             event.severity,
+                             event.message);
+                }
+            }
+            Err(e) => {
+                warn!("Failed to get recent events: {}", e);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_tests() -> Result<()> {
+    info!("🧪 Running A2Z IDS/IPS Tests");
+    
+    // Test database connection
+    match DatabaseConnection::new().await {
+        Ok(_) => {
+            info!("✅ Database connection test passed");
+        }
+        Err(e) => {
+            error!("❌ Database connection test failed: {}", e);
+        }
+    }
+    
+    // Test packet capture
+    match find_default_interface() {
+        Ok(interface) => {
+            info!("✅ Network interface test passed: {}", interface.name);
+        }
+        Err(e) => {
+            error!("❌ Network interface test failed: {}", e);
+        }
+    }
+    
+    // Test threat detector
+    match ThreatDetector::new().await {
+        Ok(_) => {
+            info!("✅ Threat detector test passed");
+        }
+        Err(e) => {
+            error!("❌ Threat detector test failed: {}", e);
+        }
+    }
+    
     Ok(())
 }
 
 fn build_cli() -> Command {
-    Command::new("a2z-ids")
+    Command::new("a2z-ids-core")
         .version("1.0.0")
         .author("A2Z SOC Team <dev@a2zsoc.com>")
         .about("A2Z IDS/IPS Core Detection Engine")
         .subcommand(
             Command::new("start")
-                .about("Start the IDS/IPS system")
-                .arg(
-                    Arg::new("interface")
-                        .short('i')
-                        .long("interface")
-                        .value_name("INTERFACE")
-                        .help("Network interface to monitor")
-                )
-                .arg(
-                    Arg::new("config")
-                        .short('c')
-                        .long("config")
-                        .value_name("FILE")
-                        .help("Configuration file path")
-                        .default_value("config.yaml")
-                )
-                .arg(
-                    Arg::new("privileged")
-                        .short('p')
-                        .long("privileged")
-                        .help("Run with elevated privileges for packet capture")
-                        .action(clap::ArgAction::SetTrue)
-                )
+                .about("Start the IDS/IPS engine")
+                .arg(Arg::new("interface")
+                    .short('i')
+                    .long("interface")
+                    .value_name("INTERFACE")
+                    .help("Network interface to monitor (default: auto)")
+                    .default_value("auto"))
+                .arg(Arg::new("config")
+                    .short('c')
+                    .long("config")
+                    .value_name("CONFIG_FILE")
+                    .help("Configuration file path")
+                    .default_value("/etc/a2z-ids/config.yaml"))
         )
         .subcommand(
             Command::new("stop")
-                .about("Stop the IDS/IPS system")
+                .about("Stop the IDS/IPS engine")
         )
         .subcommand(
             Command::new("status")
@@ -110,218 +350,39 @@ fn build_cli() -> Command {
         )
 }
 
-async fn start_system(matches: &ArgMatches) -> Result<()> {
-    info!("🔧 Initializing A2Z IDS/IPS system...");
-    
-    // Check platform and privileges
-    #[cfg(target_os = "macos")]
-    {
-        if matches.get_flag("privileged") && !MacOSNetworkHandler::check_privileges() {
-            warn!("⚠️  Advanced packet capture requires root privileges on macOS");
-            warn!("💡 Consider running with: sudo ./a2z-ids start --privileged");
-        }
-        
-        MacOSNetworkHandler::setup_packet_capture()?;
-    }
-    
-    // Get network interfaces
-    let interfaces = get_network_interfaces()?;
-    if interfaces.is_empty() {
-        return Err(anyhow::anyhow!("No suitable network interfaces found"));
-    }
-    
-    // Select interface
-    let interface = if let Some(interface_name) = matches.get_one::<String>("interface") {
-        interfaces.into_iter()
-            .find(|iface| iface.name == *interface_name)
-            .ok_or_else(|| anyhow::anyhow!("Interface '{}' not found", interface_name))?
-    } else {
-        select_default_interface(interfaces)?
-    };
-    
-    let description = if interface.description.is_empty() {
-        "No description"
-    } else {
-        &interface.description
-    };
-    info!("📡 Selected interface: {} ({})", interface.name, description);
-
-    // Initialize threat detector
-    let _threat_detector = Arc::new(ThreatDetector::new());
-    
-    // Initialize packet statistics
-    let packet_stats = Arc::new(Mutex::new(PacketStats::default()));
-                
-    // Create packet capture
-    let mut packet_capture = PacketCapture::new(
-        interface,
-        _threat_detector.clone(),
-        packet_stats.clone()
-    );
-                    
-    // Start the capture in background
-    let capture_handle = tokio::spawn(async move {
-        if let Err(e) = packet_capture.start_capture().await {
-            error!("💥 Packet capture failed: {}", e);
-            }
-    });
-    
-    // Start statistics reporting
-    let stats_handle = tokio::spawn(async move {
-        report_statistics(packet_stats).await;
-    });
-    
-    info!("✅ A2Z IDS/IPS system started successfully");
-    info!("💡 Press Ctrl+C to stop");
-    
-    // Wait for shutdown signal
-    wait_for_shutdown_signal().await?;
-    
-    // Cleanup
-    info!("🛑 Shutting down A2Z IDS/IPS system...");
-    capture_handle.abort();
-    stats_handle.abort();
-    
-    info!("✅ System stopped successfully");
-    Ok(())
-}
-
-async fn stop_system() -> Result<()> {
-    info!("🛑 Stopping A2Z IDS/IPS system...");
-    // Implementation would depend on how the system tracks running processes
-    info!("✅ System stopped");
-    Ok(())
-}
-
-async fn show_status() -> Result<()> {
-    info!("📊 A2Z IDS/IPS System Status");
-    println!("Version: 1.0.0");
-    println!("Platform: {}", std::env::consts::OS);
-    println!("Architecture: {}", std::env::consts::ARCH);
-    
-    // Check if system is running
-    println!("Status: Running"); // This would be dynamic in a real implementation
-    
-    // Show available interfaces
-    let interfaces = get_network_interfaces()?;
-    println!("Available interfaces: {}", interfaces.len());
-    for interface in interfaces {
-        let description = if interface.description.is_empty() {
-            "No description"
-        } else {
-            &interface.description
-        };
-        println!("  - {} ({})", interface.name, description);
-    }
+fn init_logging() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter("a2z_ids_core=info,warn,error")
+        .with_target(false)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
+        .init();
     
     Ok(())
 }
 
-async fn run_tests() -> Result<()> {
-    info!("🧪 Running A2Z IDS/IPS system tests...");
-    
-    // Test 1: Network interface detection
-    println!("🔍 Testing network interface detection...");
-    let interfaces = get_network_interfaces()?;
-    println!("✅ Found {} network interfaces", interfaces.len());
-    
-    // Test 2: Threat detector initialization
-    println!("🛡️  Testing threat detector...");
-    let _threat_detector = ThreatDetector::new();
-    println!("✅ Threat detector initialized");
-    
-    // Test 3: macOS specific tests
-    #[cfg(target_os = "macos")]
-    {
-        println!("🍎 Testing macOS-specific features...");
-        println!("  Root privileges: {}", MacOSNetworkHandler::check_privileges());
-        println!("✅ macOS tests completed");
-    }
-    
-    println!("✅ All tests passed!");
-    Ok(())
-}
-
-fn get_network_interfaces() -> Result<Vec<NetworkInterface>> {
+fn find_default_interface() -> Result<NetworkInterface> {
     let interfaces = pnet_datalink::interfaces();
     
-    // Filter out loopback and non-operational interfaces
-    let filtered_interfaces: Vec<NetworkInterface> = interfaces
-        .into_iter()
-        .filter(|iface| {
-            !iface.is_loopback() && 
-            iface.is_up() && 
-            !iface.ips.is_empty()
-        })
-        .collect();
-    
-    if filtered_interfaces.is_empty() {
-        warn!("No suitable network interfaces found, showing all interfaces:");
-        let all_interfaces = pnet_datalink::interfaces();
-        for iface in &all_interfaces {
-            info!("  - {} (up: {}, loopback: {}, IPs: {})", 
-                  iface.name, iface.is_up(), iface.is_loopback(), iface.ips.len());
+    // Find the first non-loopback interface that is up
+    for interface in interfaces {
+        if !interface.is_loopback() && interface.is_up() {
+            return Ok(interface);
         }
-        return Ok(all_interfaces);
-    }
-    
-    Ok(filtered_interfaces)
-}
-
-fn select_default_interface(interfaces: Vec<NetworkInterface>) -> Result<NetworkInterface> {
-    // Prefer interfaces with typical names
-    let preferred_names = ["en0", "eth0", "wlan0", "wi-fi"];
-    
-    for name in &preferred_names {
-        if let Some(interface) = interfaces.iter().find(|iface| 
-            iface.name.to_lowercase().contains(&name.to_lowercase())) {
-            info!("🎯 Auto-selected interface: {} (preferred)", interface.name);
-            return Ok(interface.clone());
-        }
-    }
-    
-    // If no preferred interface found, select the first non-loopback interface
-    if let Some(interface) = interfaces.into_iter()
-        .find(|iface| !iface.is_loopback() && iface.is_up()) {
-        info!("🎯 Auto-selected interface: {} (first available)", interface.name);
-        return Ok(interface);
     }
     
     Err(anyhow::anyhow!("No suitable network interface found"))
 }
 
-async fn report_statistics(stats: Arc<Mutex<PacketStats>>) {
-    let mut interval = tokio::time::interval(Duration::from_secs(30));
+fn find_interface_by_name(name: &str) -> Result<NetworkInterface> {
+    let interfaces = pnet_datalink::interfaces();
     
-    loop {
-        interval.tick().await;
-        
-        let stats_snapshot = {
-            let stats_guard = stats.lock().await;
-            stats_guard.clone()
-        };
-        
-        info!("📊 Statistics - Packets: {}, TCP: {}, UDP: {}, ICMP: {}, Threats: {}, Bytes: {}",
-              stats_snapshot.total_packets,
-              stats_snapshot.tcp_packets,
-              stats_snapshot.udp_packets,
-              stats_snapshot.icmp_packets,
-              stats_snapshot.threats_detected,
-              stats_snapshot.bytes_processed);
-    }
-}
-
-async fn wait_for_shutdown_signal() -> Result<()> {
-    let mut signals = AsyncSignals::new(&[SIGTERM])?;
-    
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            info!("🛑 Received Ctrl+C signal");
-        }
-        _ = signals.next() => {
-            info!("🛑 Received termination signal");
+    for interface in interfaces {
+        if interface.name == name {
+            return Ok(interface);
         }
     }
     
-    Ok(())
+    Err(anyhow::anyhow!("Network interface '{}' not found", name))
 } 

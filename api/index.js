@@ -14,7 +14,7 @@ const adminRoutes = require('./routes/admin');
 const userRoutes = require('./routes/user');
 const auditRoutes = require('./routes/audits');
 const threatIntelRoutes = require('./routes/threatIntelligence');
-// const cloudInfraRoutes = require('./routes/cloudInfra'); // Temporarily disabled
+const cloudInfraRoutes = require('./routes/cloudInfra'); // Temporarily disabled
 const integrationRoutes = require('./routes/integrations');
 const aiInsightsRoutes = require('./routes/aiInsights');
 const complianceRoutes = require('./routes/compliance');
@@ -27,6 +27,8 @@ const alertsRoutes = require('./routes/alerts');
 const dashboardRoutes = require('./routes/dashboard');
 const recommendationsRoutes = require('./routes/recommendations');
 const billingRoutes = require('./routes/billing');
+const siemRoutes = require('./routes/siem');
+const soarRoutes = require('./routes/soar');
 
 // Import middleware
 const { tenantIsolation } = require('./middleware/tenantIsolation');
@@ -246,6 +248,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/security-recommendations', recommendationsRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/network-agents', networkAgentsRoutes);
+app.use('/api/siem', siemRoutes);
+app.use('/api/soar', soarRoutes);
 
 // ==============================================
 // API DOCUMENTATION (Development only)
