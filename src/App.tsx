@@ -20,6 +20,10 @@ import AiInsights from '@/pages/AiInsights';
 import Settings from '@/pages/Settings';
 import NotFound from '@/pages/NotFound';
 
+// SIEM and SOAR Pages
+import { SIEM } from '@/pages/SIEM';
+import { SOAR } from '@/pages/SOAR';
+
 // Additional Pages
 import ROIDashboard from '@/pages/ROIDashboard';
 import Campaigns from '@/pages/Campaigns';
@@ -95,6 +99,10 @@ function App() {
                         <Route index element={<Navigate to="/dashboard" replace />} />
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/roi-dashboard" element={<ROIDashboard />} />
+
+                        {/* SIEM and SOAR Routes */}
+                        <Route path="/siem" element={<SIEM />} />
+                        <Route path="/soar" element={<SOAR />} />
 
                         {/* Core Features */}
                         <Route path="/threats" element={<ThreatIntel />} />

@@ -27,13 +27,21 @@ import {
   Monitor,
   Radar,
   BarChart,
-  FileCode
+  FileCode,
+  Eye,
+  Workflow,
+  Bot,
+  GitBranch
 } from 'lucide-react';
 
 const navItems = [
   // Main Dashboards
   { name: 'Security Dashboard', path: '/dashboard', icon: <BarChart3 className="h-5 w-5" /> },
   { name: 'ROI Analytics', path: '/roi-dashboard', icon: <TrendingUp className="h-5 w-5" /> },
+  
+  // SIEM & SOAR Section
+  { name: 'SIEM Dashboard', path: '/siem', icon: <Eye className="h-5 w-5" /> },
+  { name: 'SOAR Dashboard', path: '/soar', icon: <Workflow className="h-5 w-5" /> },
   
   // Network Agent Section
   { name: 'Network Agent', path: '/network-agent', icon: <Monitor className="h-5 w-5" /> },
@@ -99,30 +107,24 @@ const Sidebar: React.FC = () => {
           <Link
             key={item.path}
             to={item.path}
-            title={item.name}
             className={cn(
-              "flex items-center space-x-3 px-3 py-2 rounded-md transition-colors group",
+              "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
               location.pathname === item.path
                 ? "bg-blue-600 text-white"
-                : "text-gray-300 hover:bg-slate-700 hover:text-white"
+                : "text-slate-300 hover:bg-slate-700 hover:text-white"
             )}
           >
-            <div className="flex-shrink-0">
-              {item.icon}
-            </div>
-            <span className="text-sm truncate min-w-0">{item.name}</span>
+            {item.icon}
+            <span className="truncate">{item.name}</span>
           </Link>
         ))}
       </nav>
       
       {/* Footer */}
       <div className="p-4 border-t border-slate-700 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 min-w-0">
-            <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>
-            <span className="text-sm text-gray-300 truncate">System Online</span>
-          </div>
-          <span className="text-xs text-gray-400 flex-shrink-0">v1.0.0</span>
+        <div className="text-xs text-slate-400 text-center">
+          <div>A2Z SOC Platform</div>
+          <div>v2.0.0</div>
         </div>
       </div>
     </div>
