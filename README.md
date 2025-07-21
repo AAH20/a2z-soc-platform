@@ -306,11 +306,6 @@ We welcome contributions from the cybersecurity community! A2Z SOC is now open s
 ## 📞 Contact & Support
 
 - **Website**: [cloudsecpath.vercel.app](https://cloudsecpath.vercel.app)
-- **Documentation**: [cloudsecpath.vercel.app/docs](https://cloudsecpath.vercel.app/docs)
-- **Enterprise Sales**: enterprise@cloudsecpath.com
-- **Technical Support**: support@cloudsecpath.com
-- **Investment Inquiries**: investors@cloudsecpath.com
-- **Community**: [cloudsecpath.vercel.app/community](https://cloudsecpath.vercel.app/community)
 
 ---
 
