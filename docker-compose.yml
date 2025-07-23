@@ -66,53 +66,13 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/postgres
   redis_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/redis
   clickhouse_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/clickhouse
   elasticsearch_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/elasticsearch
   supervisor_logs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./logs/supervisor
   app_logs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./logs/app
   pcap_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/pcap
   rules_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/rules
 
 networks:
   default:

@@ -8,6 +8,7 @@ RUN apk add --no-cache \
     postgresql postgresql-contrib \
     redis \
     python3 \
+    nginx \
     make g++ python3-dev
 
 # Create users for services

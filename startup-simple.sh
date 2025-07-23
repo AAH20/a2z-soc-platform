@@ -15,6 +15,10 @@ redis-server /etc/redis.conf --daemonize yes
 echo "⏳ Waiting for databases..."
 sleep 10
 
+# Insert demo users
+echo "👥 Creating demo users..."
+su-exec postgres psql -h localhost -d a2z_soc -f /app/demo-users.sql
+
 # Set environment variables
 export NODE_ENV="development"
 export DATABASE_URL="postgresql://postgres@localhost:5432/a2z_soc"
@@ -26,10 +30,10 @@ cd /app/api
 node index.js &
 API_PID=$!
 
-# Start Frontend (serve built files)
-echo "🎨 Starting Frontend Server..."
-cd /app/dist
-python3 -m http.server 8080 &
+# Start Frontend (development server with SPA routing)
+echo "🎨 Starting Frontend Server (npm run dev)..."
+cd /app
+npm run dev -- --host 0.0.0.0 --port 8080 &
 FRONTEND_PID=$!
 
 echo "✅ Core services started!"

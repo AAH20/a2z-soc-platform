@@ -33,6 +33,12 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  const fillCredentials = (email: string, password: string) => {
+    setEmail(email);
+    setPassword(password);
+    setError('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -110,6 +116,69 @@ const Login: React.FC = () => {
           <p className="text-slate-400">Sign in to your security operations center</p>
         </div>
 
+        {/* Demo Credentials Section */}
+        <Card className="bg-gradient-to-r from-blue-900 to-purple-900 border-blue-700 mb-6">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Zap className="h-5 w-5 text-yellow-400" />
+              Demo Credentials
+            </CardTitle>
+            <CardDescription className="text-blue-200">
+              Use these credentials to explore the A2Z SOC platform
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div 
+                className="bg-slate-800/50 p-3 rounded-lg border border-slate-600 cursor-pointer hover:bg-slate-700/50 hover:border-green-500 transition-all"
+                onClick={() => fillCredentials('admin@demo.com', 'demo123')}
+              >
+                <div className="text-green-400 font-semibold mb-1">👑 Admin Access</div>
+                <div className="text-slate-300 text-sm">
+                  <div><span className="text-slate-400">Email:</span> admin@demo.com</div>
+                  <div><span className="text-slate-400">Password:</span> demo123</div>
+                </div>
+              </div>
+              <div 
+                className="bg-slate-800/50 p-3 rounded-lg border border-slate-600 cursor-pointer hover:bg-slate-700/50 hover:border-blue-500 transition-all"
+                onClick={() => fillCredentials('analyst@demo.com', 'demo123')}
+              >
+                <div className="text-blue-400 font-semibold mb-1">🔍 SOC Analyst</div>
+                <div className="text-slate-300 text-sm">
+                  <div><span className="text-slate-400">Email:</span> analyst@demo.com</div>
+                  <div><span className="text-slate-400">Password:</span> demo123</div>
+                </div>
+              </div>
+              <div 
+                className="bg-slate-800/50 p-3 rounded-lg border border-slate-600 cursor-pointer hover:bg-slate-700/50 hover:border-purple-500 transition-all"
+                onClick={() => fillCredentials('manager@demo.com', 'demo123')}
+              >
+                <div className="text-purple-400 font-semibold mb-1">📊 SOC Manager</div>
+                <div className="text-slate-300 text-sm">
+                  <div><span className="text-slate-400">Email:</span> manager@demo.com</div>
+                  <div><span className="text-slate-400">Password:</span> demo123</div>
+                </div>
+              </div>
+              <div 
+                className="bg-slate-800/50 p-3 rounded-lg border border-slate-600 cursor-pointer hover:bg-slate-700/50 hover:border-orange-500 transition-all"
+                onClick={() => fillCredentials('viewer@demo.com', 'demo123')}
+              >
+                <div className="text-orange-400 font-semibold mb-1">👀 Viewer</div>
+                <div className="text-slate-300 text-sm">
+                  <div><span className="text-slate-400">Email:</span> viewer@demo.com</div>
+                  <div><span className="text-slate-400">Password:</span> demo123</div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 p-3 bg-yellow-900/20 rounded-lg border border-yellow-700">
+              <div className="text-yellow-400 text-sm font-medium">💡 Pro Tip</div>
+              <div className="text-yellow-200 text-xs mt-1">
+                Click on any credential above to auto-fill the login form
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
             <CardTitle className="text-white">Welcome back</CardTitle>
@@ -174,12 +243,9 @@ const Login: React.FC = () => {
                     Remember me
                   </Label>
                 </div>
-                <Link
-                  to="/auth/forgot-password"
-                  className="text-sm text-blue-400 hover:text-blue-300 hover:underline"
-                >
+                <span className="text-sm text-slate-500 cursor-not-allowed">
                   Forgot password?
-                </Link>
+                </span>
               </div>
 
               <Button
@@ -195,7 +261,7 @@ const Login: React.FC = () => {
               <p className="text-slate-400">
                 Don't have an account?{' '}
                 <Link
-                  to="/auth/register"
+                  to="/register"
                   className="text-blue-400 hover:text-blue-300 hover:underline font-medium"
                 >
                   Sign up

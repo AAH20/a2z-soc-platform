@@ -74,9 +74,9 @@ const Index: React.FC = () => {
               <a href="#features" className="text-slate-300 hover:text-white transition-colors">Features</a>
               <a href="#pricing" className="text-slate-300 hover:text-white transition-colors">Pricing</a>
               <a href="#about" className="text-slate-300 hover:text-white transition-colors">About</a>
-              <Link to="/auth/login" className="text-slate-300 hover:text-white transition-colors">Login</Link>
+              <Link to="/login" className="text-slate-300 hover:text-white transition-colors">Login</Link>
               <Button asChild className="bg-blue-600 hover:bg-blue-700">
-                <Link to="/auth/register">Get Started</Link>
+                <Link to="/register">Get Started</Link>
               </Button>
             </nav>
           </div>
@@ -164,7 +164,7 @@ const Index: React.FC = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
-              <Link to="/auth/register">
+              <Link to="/register">
                 Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
