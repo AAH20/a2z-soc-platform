@@ -59,7 +59,7 @@ router.get('/playbooks', async (req, res) => {
  *       200:
  *         description: Playbook details
  */
-router.get('/playbooks/:playbookId', auth, authorize(['admin', 'operator', 'viewer']), async (req, res) => {
+router.get('/playbooks/:playbookId', authenticateToken, authorize(['admin', 'operator', 'viewer']), async (req, res) => {
   try {
     const { playbookId } = req.params;
     const playbook = await soarOrchestrator.getPlaybook(playbookId);
@@ -110,7 +110,7 @@ router.get('/playbooks/:playbookId', auth, authorize(['admin', 'operator', 'view
  *       201:
  *         description: Playbook created successfully
  */
-router.post('/playbooks', auth, authorize(['admin', 'operator']), async (req, res) => {
+router.post('/playbooks', authenticateToken, authorize(['admin', 'operator']), async (req, res) => {
   try {
     const { name, description, trigger_conditions, steps } = req.body;
     
@@ -222,7 +222,7 @@ router.post('/execute', async (req, res) => {
  *       200:
  *         description: Execution status and details
  */
-router.get('/executions/:executionId', auth, authorize(['admin', 'operator', 'viewer']), async (req, res) => {
+router.get('/executions/:executionId', authenticateToken, authorize(['admin', 'operator', 'viewer']), async (req, res) => {
   try {
     const { executionId } = req.params;
     const execution = await soarOrchestrator.getExecutionStatus(executionId);
@@ -260,7 +260,7 @@ router.get('/executions/:executionId', auth, authorize(['admin', 'operator', 'vi
  *       200:
  *         description: Execution stopped successfully
  */
-router.post('/executions/:executionId/stop', auth, authorize(['admin', 'operator']), async (req, res) => {
+router.post('/executions/:executionId/stop', authenticateToken, authorize(['admin', 'operator']), async (req, res) => {
   try {
     const { executionId } = req.params;
     const execution = await soarOrchestrator.stopExecution(executionId);
@@ -314,7 +314,7 @@ router.post('/executions/:executionId/stop', auth, authorize(['admin', 'operator
  *       201:
  *         description: Incident created successfully
  */
-router.post('/incidents', auth, authorize(['admin', 'operator']), async (req, res) => {
+router.post('/incidents', authenticateToken, authorize(['admin', 'operator']), async (req, res) => {
   try {
     const { 
       title, 
@@ -450,7 +450,7 @@ router.get('/incidents', async (req, res) => {
  *       200:
  *         description: Incident details
  */
-router.get('/incidents/:incidentId', auth, authorize(['admin', 'operator', 'viewer']), async (req, res) => {
+router.get('/incidents/:incidentId', authenticateToken, authorize(['admin', 'operator', 'viewer']), async (req, res) => {
   try {
     const { incidentId } = req.params;
     
@@ -519,7 +519,7 @@ router.get('/incidents/:incidentId', auth, authorize(['admin', 'operator', 'view
  *       200:
  *         description: Incident updated successfully
  */
-router.put('/incidents/:incidentId', auth, authorize(['admin', 'operator']), async (req, res) => {
+router.put('/incidents/:incidentId', authenticateToken, authorize(['admin', 'operator']), async (req, res) => {
   try {
     const { incidentId } = req.params;
     const { status, assignee, notes, resolution } = req.body;
@@ -564,7 +564,7 @@ router.put('/incidents/:incidentId', auth, authorize(['admin', 'operator']), asy
  *       200:
  *         description: List of available integrations
  */
-router.get('/integrations', auth, authorize(['admin', 'operator', 'viewer']), async (req, res) => {
+router.get('/integrations', authenticateToken, authorize(['admin', 'operator', 'viewer']), async (req, res) => {
   try {
     const integrations = Array.from(soarOrchestrator.integrations.values()).map(integration => ({
       name: integration.name,
@@ -605,7 +605,7 @@ router.get('/integrations', auth, authorize(['admin', 'operator', 'viewer']), as
  *       200:
  *         description: Integration test results
  */
-router.post('/integrations/:integrationName/test', auth, authorize(['admin', 'operator']), async (req, res) => {
+router.post('/integrations/:integrationName/test', authenticateToken, authorize(['admin', 'operator']), async (req, res) => {
   try {
     const { integrationName } = req.params;
     const integration = soarOrchestrator.integrations.get(integrationName);

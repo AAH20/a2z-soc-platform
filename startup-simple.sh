@@ -26,10 +26,10 @@ cd /app/api
 node index.js &
 API_PID=$!
 
-# Start Frontend (serve built files)
+# Start Frontend with custom SPA server (handles client-side routing properly)
 echo "🎨 Starting Frontend Server..."
-cd /app/dist
-python3 -m http.server 8080 &
+cd /app
+node spa-server.js &
 FRONTEND_PID=$!
 
 echo "✅ Core services started!"

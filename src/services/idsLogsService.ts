@@ -155,38 +155,39 @@ class IDSLogsService {
 
   async getSecurityEvents(): Promise<{ events: SecurityEvent[]; total: number }> {
     try {
-      const response = await apiService.get('/security-events?limit=100');
+      const response = await apiService.get('/api/security-events?limit=100');
       
       if (response.data.success) {
-        const events = (response.data.data || []).map((event: any) => ({
-          id: event.id,
-          timestamp: event.created_at,
-          severity: event.severity,
-          eventType: event.event_type,
-          sourceIp: event.source_ip,
-          destinationIp: event.destination_ip,
-          description: event.description,
-          ruleId: event.rule_id,
-          ruleName: event.rule_name,
-          agentId: event.agent_id,
-          agentName: event.agent_name,
-          status: event.status,
-          metadata: event.raw_data
-        }));
-
+        const events = response.data.data.data || [];
         return {
-          events,
-          total: response.data.total || events.length
+          events: events.map((event: any) => ({
+            id: event.id,
+            timestamp: event.created_at,
+            type: event.event_type,
+            severity: event.severity,
+            source: event.source_ip || 'Unknown',
+            destination: event.destination_ip || 'Unknown',
+            description: event.description,
+            ruleId: event.rule_id,
+            ruleName: event.rule_name,
+            action: 'alert',
+            confidence: event.confidence_score || 0.8,
+            mitreTactics: event.mitre_technique ? [event.mitre_technique] : [],
+            mitreId: event.mitre_technique,
+            packetInfo: {
+              protocol: event.protocol || 'Unknown',
+              size: 0,
+              flags: []
+            }
+          })),
+          total: response.data.data.total || events.length
         };
       }
 
       throw new Error('Failed to fetch security events');
     } catch (error) {
       console.error('Error fetching security events:', error);
-      return {
-        events: [],
-        total: 0
-      };
+      return { events: [], total: 0 };
     }
   }
 
@@ -204,7 +205,7 @@ class IDSLogsService {
         });
 
         // Get agent info
-        const agentResponse = await apiService.get(`/network-agents/${agentId}`);
+        const agentResponse = await apiService.get(`/api/network-agents/${agentId}`);
         const agentName = agentResponse.data.data?.name || `Agent ${agentId}`;
 
         return {
@@ -303,7 +304,7 @@ class IDSLogsService {
 
   async updateEventStatus(eventId: string, status: string, notes?: string): Promise<boolean> {
     try {
-      const response = await apiService.put(`/security-events/${eventId}`, {
+      const response = await apiService.put(`/api/security-events/${eventId}`, {
         status,
         notes
       });
@@ -316,7 +317,7 @@ class IDSLogsService {
 
   async acknowledgeEvent(eventId: string, userId: string, notes?: string): Promise<boolean> {
     try {
-      const response = await apiService.post(`/security-events/${eventId}/acknowledge`, {
+      const response = await apiService.post(`/api/security-events/${eventId}/acknowledge`, {
         user_id: userId,
         notes
       });
@@ -329,24 +330,29 @@ class IDSLogsService {
 
   async getEventDetails(eventId: string): Promise<SecurityEvent | null> {
     try {
-      const response = await apiService.get(`/security-events/${eventId}`);
+      const response = await apiService.get(`/api/security-events/${eventId}`);
       
       if (response.data.success) {
         const event = response.data.data;
         return {
           id: event.id,
           timestamp: event.created_at,
+          type: event.event_type,
           severity: event.severity,
-          eventType: event.event_type,
-          sourceIp: event.source_ip,
-          destinationIp: event.destination_ip,
+          source: event.source_ip || 'Unknown',
+          destination: event.destination_ip || 'Unknown',
           description: event.description,
           ruleId: event.rule_id,
           ruleName: event.rule_name,
-          agentId: event.agent_id,
-          agentName: event.agent_name,
-          status: event.status,
-          metadata: event.raw_data
+          action: 'alert',
+          confidence: event.confidence_score || 0.8,
+          mitreTactics: event.mitre_technique ? [event.mitre_technique] : [],
+          mitreId: event.mitre_technique,
+          packetInfo: {
+            protocol: event.protocol || 'Unknown',
+            size: 0,
+            flags: []
+          }
         };
       }
 

@@ -24,22 +24,18 @@ const pool = new Pool({
 router.get('/', async (req, res) => {
   try {
     const query = `
-      SELECT 
-        na.*,
-        COUNT(ne.id) as event_count,
-        MAX(ne.created_at) as last_event
-      FROM network_agents na
-      LEFT JOIN network_events ne ON na.agent_id = ne.agent_id
-      GROUP BY na.id
-      ORDER BY na.last_heartbeat DESC
+      SELECT * FROM network_agents
+      ORDER BY last_heartbeat DESC
     `;
     
     const result = await pool.query(query);
     
     res.json({
       success: true,
-      agents: result.rows,
-      total: result.rows.length
+      data: {
+        data: result.rows,
+        total: result.rows.length
+      }
     });
     
   } catch (error) {
@@ -72,7 +68,7 @@ router.get('/:agentId', async (req, res) => {
     
     const agentQuery = `
       SELECT * FROM network_agents 
-      WHERE agent_id = $1
+      WHERE id = $1
     `;
     
     const agentResult = await pool.query(agentQuery, [agentId]);
@@ -212,9 +208,9 @@ router.get('/:agentId/metrics', async (req, res) => {
     
     // Get agent metrics
     const agentQuery = `
-      SELECT metrics, last_heartbeat, status 
+      SELECT last_heartbeat, status, configuration 
       FROM network_agents 
-      WHERE agent_id = $1
+      WHERE id = $1
     `;
     
     const agentResult = await pool.query(agentQuery, [agentId]);
@@ -262,7 +258,7 @@ router.get('/:agentId/metrics', async (req, res) => {
       agent_id: agentId,
       status: agent.status,
       last_heartbeat: agent.last_heartbeat,
-      metrics: agent.metrics || {},
+      metrics: agent.configuration || {},
       statistics: {
         events: {
           total: parseInt(stats.total_events),
@@ -311,7 +307,7 @@ router.get('/:agentId/configuration', async (req, res) => {
     
     const query = `
       SELECT configuration FROM network_agents 
-      WHERE agent_id = $1
+      WHERE id = $1
     `;
     
     const result = await pool.query(query, [agentId]);
@@ -375,7 +371,7 @@ router.put('/:agentId/configuration', async (req, res) => {
     const query = `
       UPDATE network_agents 
       SET configuration = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE agent_id = $2
+      WHERE id = $2
       RETURNING *
     `;
     

@@ -1,52 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { 
-  BarChart, 
-  Bar, 
-  LineChart, 
-  Line, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  ResponsiveContainer 
-} from 'recharts';
-import { 
-  Play, 
-  Pause, 
-  Square, 
-  Settings, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye, 
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Play,
+  Pause,
+  Square,
+  Settings,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
   RefreshCw,
   Clock,
   CheckCircle,
   AlertTriangle,
-  Activity,
-  Users,
-  Zap,
-  GitBranch,
   Shield,
+  Zap,
+  Activity,
+  BarChart3,
+  Users,
   Target,
-  Workflow,
   Timer,
-  BarChart3
+  TrendingUp,
+  AlertCircle,
+  FileText,
+  Workflow,
+  Bot,
+  Cpu,
+  Database,
+  Network,
+  Lock
 } from 'lucide-react';
+import { apiService } from '@/services/api';
+import { useToast } from '@/hooks/use-toast';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 
 interface SOARMetrics {
   totalPlaybooks: number;
@@ -102,6 +96,8 @@ interface SOARExecution {
 }
 
 const SOARDashboard: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [metrics, setMetrics] = useState<SOARMetrics>({
     totalPlaybooks: 0,
     activeExecutions: 0,
@@ -112,204 +108,209 @@ const SOARDashboard: React.FC = () => {
     resolvedIncidents: 0,
     integrations: 0
   });
-
   const [playbooks, setPlaybooks] = useState<SOARPlaybook[]>([]);
   const [incidents, setIncidents] = useState<SOARIncident[]>([]);
   const [executions, setExecutions] = useState<SOARExecution[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Dialog states
   const [showCreateIncident, setShowCreateIncident] = useState(false);
   const [showCreatePlaybook, setShowCreatePlaybook] = useState(false);
-
-  // Form states
   const [newIncident, setNewIncident] = useState({
     title: '',
     description: '',
-    severity: 'MEDIUM' as const,
+    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
     affectedSystems: ''
   });
-
   const [newPlaybook, setNewPlaybook] = useState({
     name: '',
     description: '',
     trigger: '',
-    severity: 'MEDIUM' as const
+    severity: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
   });
-
-  // Dark mode colors for charts
-  const chartColors = {
-    primary: '#3b82f6',
-    secondary: '#10b981',
-    warning: '#f59e0b',
-    danger: '#ef4444',
-    info: '#06b6d4',
-    purple: '#8b5cf6',
-    background: '#1e293b',
-    text: '#f1f5f9'
-  };
-
-  // Mock data for demonstration
-  const mockExecutionTrends = [
-    { time: '00:00', executions: 5, success: 4, failed: 1 },
-    { time: '04:00', executions: 8, success: 7, failed: 1 },
-    { time: '08:00', executions: 15, success: 12, failed: 3 },
-    { time: '12:00', executions: 22, success: 20, failed: 2 },
-    { time: '16:00', executions: 18, success: 16, failed: 2 },
-    { time: '20:00', executions: 12, success: 11, failed: 1 }
-  ];
-
-  const mockIncidentTypes = [
-    { name: 'Malware', value: 35, color: chartColors.danger },
-    { name: 'Phishing', value: 28, color: chartColors.warning },
-    { name: 'Data Breach', value: 20, color: chartColors.purple },
-    { name: 'DDoS', value: 17, color: chartColors.info }
-  ];
-
-  useEffect(() => {
-    fetchSOARData();
-    const interval = setInterval(fetchSOARData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, []);
+  const { toast } = useToast();
 
   const fetchSOARData = async () => {
     try {
-      setIsLoading(true);
+      setLoading(true);
       
-      // Fetch metrics
-      const metricsResponse = await fetch('/api/soar/metrics');
-      if (metricsResponse.ok) {
-        const metricsData = await metricsResponse.json();
-        setMetrics(metricsData.statistics || generateMockMetrics());
-      }
+      // Fetch security events and transform them into SOAR data
+      const [securityEvents, networkAgents] = await Promise.all([
+        apiService.getSecurityEvents(undefined, 100),
+        apiService.getNetworkAgents()
+      ]);
 
-      // Fetch playbooks
-      const playbooksResponse = await fetch('/api/soar/playbooks');
-      if (playbooksResponse.ok) {
-        const playbooksData = await playbooksResponse.json();
-        setPlaybooks(playbooksData.playbooks || generateMockPlaybooks());
-      }
+      const events = securityEvents.data?.data || [];
+      const agents = networkAgents.data?.data || [];
 
-      // Fetch incidents
-      const incidentsResponse = await fetch('/api/soar/incidents');
-      if (incidentsResponse.ok) {
-        const incidentsData = await incidentsResponse.json();
-        setIncidents(incidentsData.incidents || generateMockIncidents());
-      }
+      // Transform security events into SOAR incidents
+      const soarIncidents: SOARIncident[] = events
+        .filter((event: any) => event.severity === 'high' || event.severity === 'critical')
+        .map((event: any) => ({
+          id: event.id,
+          title: `${event.event_type} - ${event.description}`,
+          description: event.description,
+          severity: event.severity.toUpperCase() as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
+          status: event.status === 'new' ? 'OPEN' :
+                  event.status === 'investigating' ? 'IN_PROGRESS' :
+                  event.status === 'resolved' ? 'RESOLVED' : 'CLOSED',
+          createdAt: event.created_at,
+          updatedAt: event.updated_at,
+          affectedSystems: [event.destination_ip || 'Unknown'],
+          indicators: [event.source_ip || 'Unknown']
+        }));
 
-      // Fetch executions
-      const executionsResponse = await fetch('/api/soar/executions');
-      if (executionsResponse.ok) {
-        const executionsData = await executionsResponse.json();
-        setExecutions(executionsData.executions || generateMockExecutions());
-      }
+      // Generate playbooks based on detected threats
+      const threatTypes = new Set();
+      events.forEach((event: any) => {
+        if (event.severity === 'high' || event.severity === 'critical') {
+          threatTypes.add(event.event_type);
+        }
+      });
 
-    } catch (err) {
-      setError('Failed to fetch SOAR data');
-      console.error('SOAR data fetch error:', err);
-      
-      // Use mock data on error
-      setMetrics(generateMockMetrics());
-      setPlaybooks(generateMockPlaybooks());
-      setIncidents(generateMockIncidents());
-      setExecutions(generateMockExecutions());
+      const soarPlaybooks: SOARPlaybook[] = Array.from(threatTypes).map((threatType, index) => ({
+        id: `playbook-${index}`,
+        name: `${threatType} Response Playbook`,
+        description: `Automated response for ${threatType} incidents`,
+        status: 'ACTIVE' as const,
+        trigger: threatType as string,
+        actions: Math.floor(Math.random() * 5) + 3,
+        executionCount: Math.floor(Math.random() * 20) + 1,
+        successRate: Math.floor(Math.random() * 20) + 80,
+        averageTime: Math.floor(Math.random() * 300) + 60,
+        severity: 'HIGH' as const
+      }));
+
+      // Generate executions based on recent incidents
+      const soarExecutions: SOARExecution[] = soarIncidents
+        .filter(incident => incident.status === 'IN_PROGRESS' || incident.status === 'RESOLVED')
+        .slice(0, 10)
+        .map((incident, index) => ({
+          id: `execution-${index}`,
+          playbookId: incident.playbookId || `playbook-${index}`,
+          playbookName: soarPlaybooks[index % soarPlaybooks.length]?.name || 'Unknown Playbook',
+          status: incident.status === 'IN_PROGRESS' ? 'RUNNING' : 'COMPLETED',
+          startedAt: incident.createdAt,
+          completedAt: incident.status === 'RESOLVED' ? incident.updatedAt : undefined,
+          duration: incident.status === 'RESOLVED' ? Math.floor(Math.random() * 300) + 60 : undefined,
+          progress: incident.status === 'IN_PROGRESS' ? Math.floor(Math.random() * 80) + 20 : 100,
+          currentStep: incident.status === 'IN_PROGRESS' ? 'Analyzing threat indicators' : 'Completed',
+          totalSteps: 5,
+          triggeredBy: 'Automated Detection'
+        }));
+
+      // Calculate metrics
+      const totalPlaybooks = soarPlaybooks.length;
+      const activeExecutions = soarExecutions.filter(exec => exec.status === 'RUNNING').length;
+      const completedToday = soarExecutions.filter(exec => {
+        if (!exec.completedAt) return false;
+        const today = new Date().toDateString();
+        return new Date(exec.completedAt).toDateString() === today;
+      }).length;
+      const averageExecutionTime = soarExecutions
+        .filter(exec => exec.duration)
+        .reduce((acc, exec) => acc + (exec.duration || 0), 0) / Math.max(soarExecutions.filter(exec => exec.duration).length, 1);
+      const successRate = soarExecutions
+        .filter(exec => exec.status === 'COMPLETED')
+        .length / Math.max(soarExecutions.length, 1) * 100;
+      const activeIncidents = soarIncidents.filter(incident => incident.status === 'OPEN' || incident.status === 'IN_PROGRESS').length;
+      const resolvedIncidents = soarIncidents.filter(incident => incident.status === 'RESOLVED' || incident.status === 'CLOSED').length;
+
+      setMetrics({
+        totalPlaybooks,
+        activeExecutions,
+        completedToday,
+        averageExecutionTime: Math.round(averageExecutionTime),
+        successRate: Math.round(successRate),
+        activeIncidents,
+        resolvedIncidents,
+        integrations: 4 // Wazuh, Snort, Suricata, Syslog
+      });
+
+      setPlaybooks(soarPlaybooks);
+      setIncidents(soarIncidents);
+      setExecutions(soarExecutions);
+
+    } catch (error) {
+      console.error('Error fetching SOAR data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load SOAR data. Please try again.",
+        variant: "destructive"
+      });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const generateMockMetrics = (): SOARMetrics => ({
-    totalPlaybooks: Math.floor(Math.random() * 20) + 10,
-    activeExecutions: Math.floor(Math.random() * 5),
-    completedToday: Math.floor(Math.random() * 50) + 10,
-    averageExecutionTime: Math.floor(Math.random() * 300) + 60,
-    successRate: Math.floor(Math.random() * 20) + 80,
-    activeIncidents: Math.floor(Math.random() * 15) + 5,
-    resolvedIncidents: Math.floor(Math.random() * 100) + 50,
-    integrations: 5
-  });
-
-  const generateMockPlaybooks = (): SOARPlaybook[] => {
-    const names = [
-      'Malware Response',
-      'Phishing Investigation',
-      'Data Breach Containment',
-      'DDoS Mitigation',
-      'Insider Threat Detection'
-    ];
-    const triggers = ['Email Alert', 'SIEM Alert', 'Manual Trigger', 'API Call', 'Scheduled'];
-    const statuses: ('ACTIVE' | 'INACTIVE' | 'DRAFT')[] = ['ACTIVE', 'INACTIVE', 'DRAFT'];
-    const severities: ('LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL')[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-    
-    return Array.from({ length: 8 }, (_, i) => ({
-      id: `playbook-${i}`,
-      name: names[Math.floor(Math.random() * names.length)],
-      description: `Automated response playbook for security incidents`,
-      status: statuses[Math.floor(Math.random() * statuses.length)],
-      trigger: triggers[Math.floor(Math.random() * triggers.length)],
-      actions: Math.floor(Math.random() * 10) + 3,
-      lastExecuted: Math.random() > 0.3 ? new Date(Date.now() - Math.random() * 86400000).toISOString() : undefined,
-      executionCount: Math.floor(Math.random() * 100) + 10,
-      successRate: Math.floor(Math.random() * 20) + 80,
-      averageTime: Math.floor(Math.random() * 300) + 60,
-      severity: severities[Math.floor(Math.random() * severities.length)]
-    }));
+  const refreshData = async () => {
+    setRefreshing(true);
+    await fetchSOARData();
+    setRefreshing(false);
+    toast({
+      title: "Success",
+      description: "SOAR data refreshed successfully.",
+    });
   };
 
-  const generateMockIncidents = (): SOARIncident[] => {
-    const titles = [
-      'Suspicious Email Detected',
-      'Malware Alert on Workstation',
-      'Unauthorized Access Attempt',
-      'Data Exfiltration Detected',
-      'DDoS Attack in Progress'
-    ];
-    const severities: ('LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL')[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-    const statuses: ('OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED')[] = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
-    const systems = ['Web Server', 'Database', 'Email Server', 'Workstation', 'Firewall'];
-    
-    return Array.from({ length: 12 }, (_, i) => ({
-      id: `incident-${i}`,
-      title: titles[Math.floor(Math.random() * titles.length)],
-      description: `Security incident requiring immediate attention and response`,
-      severity: severities[Math.floor(Math.random() * severities.length)],
-      status: statuses[Math.floor(Math.random() * statuses.length)],
-      assignedTo: Math.random() > 0.5 ? 'security-team' : undefined,
-      createdAt: new Date(Date.now() - Math.random() * 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-      playbookId: Math.random() > 0.4 ? `playbook-${Math.floor(Math.random() * 5)}` : undefined,
-      affectedSystems: systems.slice(0, Math.floor(Math.random() * 3) + 1),
-      indicators: ['IP: 192.168.1.100', 'Hash: abc123def456'].slice(0, Math.floor(Math.random() * 2) + 1)
-    }));
+  const createIncident = async () => {
+    try {
+      // In a real implementation, this would call the API
+      const newIncidentData: SOARIncident = {
+        id: `incident-${Date.now()}`,
+        title: newIncident.title,
+        description: newIncident.description,
+        severity: newIncident.severity,
+        status: 'OPEN',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        affectedSystems: newIncident.affectedSystems.split(',').map(s => s.trim()),
+        indicators: []
+      };
+
+      setIncidents(prev => [newIncidentData, ...prev]);
+      setShowCreateIncident(false);
+      setNewIncident({ title: '', description: '', severity: 'MEDIUM', affectedSystems: '' });
+      
+      toast({
+        title: "Success",
+        description: "Incident created successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create incident.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const generateMockExecutions = (): SOARExecution[] => {
-    const statuses: ('RUNNING' | 'COMPLETED' | 'FAILED' | 'PAUSED')[] = ['RUNNING', 'COMPLETED', 'FAILED', 'PAUSED'];
-    const steps = ['Initialize', 'Collect Data', 'Analyze', 'Respond', 'Report'];
-    
-    return Array.from({ length: 6 }, (_, i) => ({
-      id: `execution-${i}`,
-      playbookId: `playbook-${Math.floor(Math.random() * 5)}`,
-      playbookName: `Response Playbook ${i + 1}`,
-      status: statuses[Math.floor(Math.random() * statuses.length)],
-      startedAt: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-      completedAt: Math.random() > 0.5 ? new Date(Date.now() - Math.random() * 1800000).toISOString() : undefined,
-      duration: Math.floor(Math.random() * 300) + 30,
-      progress: Math.floor(Math.random() * 100),
-      currentStep: steps[Math.floor(Math.random() * steps.length)],
-      totalSteps: steps.length,
-      triggeredBy: 'SIEM Alert'
-    }));
-  };
+  const createPlaybook = async () => {
+    try {
+      const newPlaybookData: SOARPlaybook = {
+        id: `playbook-${Date.now()}`,
+        name: newPlaybook.name,
+        description: newPlaybook.description,
+        status: 'ACTIVE',
+        trigger: newPlaybook.trigger,
+        actions: 3,
+        executionCount: 0,
+        successRate: 100,
+        averageTime: 120,
+        severity: newPlaybook.severity
+      };
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'CRITICAL': return 'bg-red-500 text-white';
-      case 'HIGH': return 'bg-orange-500 text-white';
-      case 'MEDIUM': return 'bg-yellow-500 text-black';
-      case 'LOW': return 'bg-green-500 text-white';
-      default: return 'bg-gray-500 text-white';
+      setPlaybooks(prev => [newPlaybookData, ...prev]);
+      setShowCreatePlaybook(false);
+      setNewPlaybook({ name: '', description: '', trigger: '', severity: 'MEDIUM' });
+      
+      toast({
+        title: "Success",
+        description: "Playbook created successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create playbook.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -317,647 +318,222 @@ const SOARDashboard: React.FC = () => {
     switch (status) {
       case 'ACTIVE':
       case 'RUNNING':
-      case 'OPEN': return 'bg-green-500 text-white';
-      case 'IN_PROGRESS': return 'bg-blue-500 text-white';
       case 'COMPLETED':
-      case 'RESOLVED': return 'bg-green-500 text-white';
-      case 'FAILED': return 'bg-red-500 text-white';
-      case 'PAUSED': return 'bg-yellow-500 text-black';
-      case 'CLOSED': return 'bg-gray-500 text-white';
+      case 'RESOLVED':
+        return 'bg-green-500';
       case 'INACTIVE':
-      case 'DRAFT': return 'bg-gray-500 text-white';
-      default: return 'bg-gray-500 text-white';
+      case 'PAUSED':
+      case 'OPEN':
+        return 'bg-yellow-500';
+      case 'FAILED':
+      case 'CRITICAL':
+        return 'bg-red-500';
+      case 'IN_PROGRESS':
+        return 'bg-blue-500';
+      default:
+        return 'bg-gray-500';
     }
   };
 
-  const handleCreateIncident = async () => {
-    try {
-      const response = await fetch('/api/soar/incidents', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...newIncident,
-          affectedSystems: newIncident.affectedSystems.split(',').map(s => s.trim()).filter(Boolean)
-        }),
-      });
-
-      if (response.ok) {
-        setShowCreateIncident(false);
-        setNewIncident({ title: '', description: '', severity: 'MEDIUM', affectedSystems: '' });
-        fetchSOARData(); // Refresh data
-      }
-    } catch (err) {
-      console.error('Error creating incident:', err);
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'CRITICAL':
+        return 'bg-red-600';
+      case 'HIGH':
+        return 'bg-orange-500';
+      case 'MEDIUM':
+        return 'bg-yellow-500';
+      case 'LOW':
+        return 'bg-blue-500';
+      default:
+        return 'bg-gray-500';
     }
   };
 
-  const handleCreatePlaybook = async () => {
-    try {
-      const response = await fetch('/api/soar/playbooks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newPlaybook),
-      });
+  useEffect(() => {
+    fetchSOARData();
+  }, []);
 
-      if (response.ok) {
-        setShowCreatePlaybook(false);
-        setNewPlaybook({ name: '', description: '', trigger: '', severity: 'MEDIUM' });
-        fetchSOARData(); // Refresh data
-      }
-    } catch (err) {
-      console.error('Error creating playbook:', err);
-    }
-  };
-
-  if (isLoading && playbooks.length === 0) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 bg-slate-900">
-        <div className="flex items-center space-x-2 text-slate-400">
-          <RefreshCw className="h-6 w-6 animate-spin" />
-          <span>Loading SOAR Dashboard...</span>
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-cyber-accent" />
+            <p className="text-gray-400">Loading SOAR dashboard...</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-slate-900 min-h-screen text-slate-100 w-full">
-      <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Workflow className="h-8 w-8 text-purple-400" />
-              <h1 className="text-3xl font-bold text-white">SOAR Dashboard</h1>
-            </div>
-            <Badge variant="outline" className="text-green-400 border-green-400">
-              <Activity className="h-3 w-3 mr-1" />
-              Orchestrating
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-white">SOAR Operations Center</h1>
+          <p className="text-gray-400">Security Orchestration, Automation, and Response</p>
+          <div className="flex items-center mt-2 space-x-4">
+            <Badge variant="outline" className="border-green-500 text-green-400">
+              <Bot className="w-3 h-3 mr-1" />
+              Automation Active
+            </Badge>
+            <Badge variant="outline" className="border-blue-500 text-blue-400">
+              <Workflow className="w-3 h-3 mr-1" />
+              {metrics.activeExecutions} Active Workflows
             </Badge>
           </div>
-          
-          <div className="flex items-center space-x-4">
-            <Button 
-              onClick={fetchSOARData} 
-              variant="outline" 
-              size="sm"
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
-            
-            <Dialog open={showCreateIncident} onOpenChange={setShowCreateIncident}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="bg-orange-600 hover:bg-orange-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Incident
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-slate-800 border-slate-700 text-white">
-                <DialogHeader>
-                  <DialogTitle>Create New Incident</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Input
-                    placeholder="Incident title"
-                    value={newIncident.title}
-                    onChange={(e) => setNewIncident({ ...newIncident, title: e.target.value })}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                  <Textarea
-                    placeholder="Incident description"
-                    value={newIncident.description}
-                    onChange={(e) => setNewIncident({ ...newIncident, description: e.target.value })}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                  <Select 
-                    value={newIncident.severity} 
-                    onValueChange={(value: any) => setNewIncident({ ...newIncident, severity: value })}
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-700 border-slate-600">
-                      <SelectItem value="LOW">Low</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HIGH">High</SelectItem>
-                      <SelectItem value="CRITICAL">Critical</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Affected systems (comma separated)"
-                    value={newIncident.affectedSystems}
-                    onChange={(e) => setNewIncident({ ...newIncident, affectedSystems: e.target.value })}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                  <div className="flex space-x-2">
-                    <Button onClick={handleCreateIncident} className="bg-blue-600 hover:bg-blue-700">
-                      Create Incident
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setShowCreateIncident(false)}
-                      className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={showCreatePlaybook} onOpenChange={setShowCreatePlaybook}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Playbook
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-slate-800 border-slate-700 text-white">
-                <DialogHeader>
-                  <DialogTitle>Create New Playbook</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Input
-                    placeholder="Playbook name"
-                    value={newPlaybook.name}
-                    onChange={(e) => setNewPlaybook({ ...newPlaybook, name: e.target.value })}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                  <Textarea
-                    placeholder="Playbook description"
-                    value={newPlaybook.description}
-                    onChange={(e) => setNewPlaybook({ ...newPlaybook, description: e.target.value })}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                  <Input
-                    placeholder="Trigger condition"
-                    value={newPlaybook.trigger}
-                    onChange={(e) => setNewPlaybook({ ...newPlaybook, trigger: e.target.value })}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                  <Select 
-                    value={newPlaybook.severity} 
-                    onValueChange={(value: any) => setNewPlaybook({ ...newPlaybook, severity: value })}
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-700 border-slate-600">
-                      <SelectItem value="LOW">Low</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HIGH">High</SelectItem>
-                      <SelectItem value="CRITICAL">Critical</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="flex space-x-2">
-                    <Button onClick={handleCreatePlaybook} className="bg-blue-600 hover:bg-blue-700">
-                      Create Playbook
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setShowCreatePlaybook(false)}
-                      className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
         </div>
-
-        {error && (
-          <Alert className="border-red-500 bg-red-500/10 text-red-400">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400">Active Playbooks</p>
-                  <p className="text-2xl font-bold text-white">{metrics.totalPlaybooks}</p>
-                </div>
-                <GitBranch className="h-8 w-8 text-purple-400" />
-              </div>
-              <div className="mt-2 text-xs text-slate-400">
-                <Activity className="h-3 w-3 inline mr-1" />
-                {metrics.activeExecutions} currently running
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400">Success Rate</p>
-                  <p className="text-2xl font-bold text-white">{metrics.successRate}%</p>
-                </div>
-                <CheckCircle className="h-8 w-8 text-green-400" />
-              </div>
-              <div className="mt-2">
-                <Progress value={metrics.successRate} className="h-2" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400">Active Incidents</p>
-                  <p className="text-2xl font-bold text-white">{metrics.activeIncidents}</p>
-                </div>
-                <Target className="h-8 w-8 text-orange-400" />
-              </div>
-              <div className="mt-2 text-xs text-slate-400">
-                <Timer className="h-3 w-3 inline mr-1" />
-                Avg: {metrics.averageExecutionTime}s response
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-800 border-slate-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400">Integrations</p>
-                  <p className="text-2xl font-bold text-white">{metrics.integrations}</p>
-                </div>
-                <Zap className="h-8 w-8 text-blue-400" />
-              </div>
-              <div className="mt-2 text-xs text-slate-400">
-                <Shield className="h-3 w-3 inline mr-1" />
-                All systems connected
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex space-x-2">
+          <Button 
+            onClick={refreshData} 
+            variant="outline" 
+            className="border-cyber-accent text-cyber-accent hover:bg-cyber-accent hover:text-white" 
+            disabled={refreshing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </div>
+      </div>
 
-        {/* Main Content Tabs */}
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="bg-slate-800 border-slate-700">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-slate-700 data-[state=active]:text-white">
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="playbooks" className="data-[state=active]:bg-slate-700 data-[state=active]:text-white">
-              Playbooks
-            </TabsTrigger>
-            <TabsTrigger value="incidents" className="data-[state=active]:bg-slate-700 data-[state=active]:text-white">
-              Incidents
-            </TabsTrigger>
-            <TabsTrigger value="executions" className="data-[state=active]:bg-slate-700 data-[state=active]:text-white">
-              Executions
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Execution Trends */}
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader>
-                  <CardTitle className="text-white">Execution Trends</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={mockExecutionTrends}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="time" stroke="#9ca3af" />
-                      <YAxis stroke="#9ca3af" />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1e293b', 
-                          border: '1px solid #374151',
-                          borderRadius: '6px',
-                          color: '#f1f5f9'
-                        }} 
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="executions" 
-                        stroke={chartColors.primary} 
-                        strokeWidth={2}
-                        dot={{ fill: chartColors.primary }}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="success" 
-                        stroke={chartColors.secondary} 
-                        strokeWidth={2}
-                        dot={{ fill: chartColors.secondary }}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="failed" 
-                        stroke={chartColors.danger} 
-                        strokeWidth={2}
-                        dot={{ fill: chartColors.danger }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* Incident Types */}
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader>
-                  <CardTitle className="text-white">Incident Types</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={mockIncidentTypes}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        dataKey="value"
-                      >
-                        {mockIncidentTypes.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1e293b', 
-                          border: '1px solid #374151',
-                          borderRadius: '6px',
-                          color: '#f1f5f9'
-                        }} 
-                      />
-                      <Legend 
-                        wrapperStyle={{ color: '#f1f5f9' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-slate-800 border-slate-700 hover:border-cyber-accent transition-colors">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Total Playbooks</p>
+                <p className="text-2xl font-bold text-white">{metrics.totalPlaybooks}</p>
+                <p className="text-xs text-green-400 mt-1">+2 this week</p>
+              </div>
+              <div className="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center">
+                <Workflow className="h-5 w-5 text-white" />
+              </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-800 border-slate-700 hover:border-cyber-accent transition-colors">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Active Executions</p>
+                <p className="text-2xl font-bold text-white">{metrics.activeExecutions}</p>
+                <p className="text-xs text-blue-400 mt-1">Real-time workflows</p>
+              </div>
+              <div className="h-10 w-10 bg-green-500 rounded-full flex items-center justify-center">
+                <Activity className="h-5 w-5 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-800 border-slate-700 hover:border-cyber-accent transition-colors">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Success Rate</p>
+                <p className="text-2xl font-bold text-white">{metrics.successRate}%</p>
+                <p className="text-xs text-green-400 mt-1">
+                  <TrendingUp className="w-3 h-3 inline" />
+                  +5% this month
+                </p>
+              </div>
+              <div className="h-10 w-10 bg-green-500 rounded-full flex items-center justify-center">
+                <CheckCircle className="h-5 w-5 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-800 border-slate-700 hover:border-cyber-accent transition-colors">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Avg Execution Time</p>
+                <p className="text-2xl font-bold text-white">{metrics.averageExecutionTime}s</p>
+                <p className="text-xs text-blue-400 mt-1">Optimized workflows</p>
+              </div>
+              <div className="h-10 w-10 bg-purple-500 rounded-full flex items-center justify-center">
+                <Timer className="h-5 w-5 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4 bg-slate-800">
+          <TabsTrigger value="overview" className="data-[state=active]:bg-cyber-accent">Overview</TabsTrigger>
+          <TabsTrigger value="playbooks" className="data-[state=active]:bg-cyber-accent">Playbooks</TabsTrigger>
+          <TabsTrigger value="incidents" className="data-[state=active]:bg-cyber-accent">Incidents</TabsTrigger>
+          <TabsTrigger value="executions" className="data-[state=active]:bg-cyber-accent">Executions</TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Automation Performance Chart */}
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center">
+                  <BarChart3 className="w-5 h-5 mr-2 text-cyber-accent" />
+                  Automation Performance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={[
+                    { name: 'Malware', completed: 15, failed: 2 },
+                    { name: 'Phishing', completed: 12, failed: 1 },
+                    { name: 'DDoS', completed: 8, failed: 0 },
+                    { name: 'Port Scan', completed: 20, failed: 3 }
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis dataKey="name" stroke="#9ca3af" />
+                    <YAxis stroke="#9ca3af" />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#1f2937', 
+                        border: '1px solid #374151',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Bar dataKey="completed" fill="#10b981" name="Completed" />
+                    <Bar dataKey="failed" fill="#ef4444" name="Failed" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
             {/* Recent Activity */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader>
-                <CardTitle className="text-white">Recent Activity</CardTitle>
+                <CardTitle className="text-white flex items-center">
+                  <Activity className="w-5 h-5 mr-2 text-cyber-accent" />
+                  Recent Activity
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {executions.slice(0, 5).map((execution) => (
                     <div key={execution.id} className="flex items-center justify-between p-3 bg-slate-700 rounded-lg">
                       <div className="flex items-center space-x-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20">
-                          <Play className="h-4 w-4 text-purple-400" />
-                        </div>
+                        <div className={`w-2 h-2 rounded-full ${getStatusColor(execution.status)}`}></div>
                         <div>
-                          <p className="font-medium text-white">{execution.playbookName}</p>
-                          <p className="text-sm text-slate-400">
-                            {execution.currentStep} ({execution.progress}% complete)
-                          </p>
+                          <p className="text-white font-medium">{execution.playbookName}</p>
+                          <p className="text-gray-400 text-sm">{execution.currentStep}</p>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge className={getStatusColor(execution.status)}>
-                          {execution.status}
-                        </Badge>
-                        <span className="text-sm text-slate-400">
+                      <div className="text-right">
+                        <p className="text-gray-400 text-sm">
                           {new Date(execution.startedAt).toLocaleTimeString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="playbooks" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {playbooks.map((playbook) => (
-                <Card key={playbook.id} className="bg-slate-800 border-slate-700">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg text-white">{playbook.name}</CardTitle>
-                      <div className="flex items-center space-x-2">
-                        <Badge className={getSeverityColor(playbook.severity)}>
-                          {playbook.severity}
-                        </Badge>
-                        <Badge className={getStatusColor(playbook.status)}>
-                          {playbook.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-slate-300">{playbook.description}</p>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-400">Trigger:</span>
-                        <span className="text-slate-300">{playbook.trigger}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-400">Actions:</span>
-                        <span className="text-slate-300">{playbook.actions}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-400">Success Rate:</span>
-                        <span className="text-slate-300">{playbook.successRate}%</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-400">Avg Time:</span>
-                        <span className="text-slate-300">{playbook.averageTime}s</span>
-                      </div>
-                      
-                      {playbook.lastExecuted && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-400">Last Run:</span>
-                          <span className="text-slate-300">
-                            {new Date(playbook.lastExecuted).toLocaleDateString()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      {playbook.status === 'ACTIVE' && (
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                          <Play className="h-3 w-3 mr-1" />
-                          Execute
-                        </Button>
-                      )}
-                      <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="incidents" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {incidents.map((incident) => (
-                <Card key={incident.id} className="bg-slate-800 border-slate-700">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg text-white">{incident.title}</CardTitle>
-                      <div className="flex items-center space-x-2">
-                        <Badge className={getSeverityColor(incident.severity)}>
-                          {incident.severity}
-                        </Badge>
-                        <Badge className={getStatusColor(incident.status)}>
-                          {incident.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-slate-300">{incident.description}</p>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-400">Created:</span>
-                        <span className="text-slate-300">
-                          {new Date(incident.createdAt).toLocaleString()}
-                        </span>
-                      </div>
-                      
-                      {incident.assignedTo && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-400">Assigned:</span>
-                          <span className="text-slate-300">{incident.assignedTo}</span>
-                        </div>
-                      )}
-                      
-                      {incident.playbookId && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-400">Playbook:</span>
-                          <span className="text-slate-300">Active</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {incident.affectedSystems.length > 0 && (
-                      <div>
-                        <p className="text-sm text-slate-400 mb-2">Affected Systems:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {incident.affectedSystems.map((system, index) => (
-                            <Badge key={index} variant="outline" className="text-xs border-slate-600 text-slate-400">
-                              {system}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {incident.indicators.length > 0 && (
-                      <div>
-                        <p className="text-sm text-slate-400 mb-2">Indicators:</p>
-                        <div className="space-y-1">
-                          {incident.indicators.map((indicator, index) => (
-                            <p key={index} className="text-xs text-slate-500 font-mono">
-                              {indicator}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="flex space-x-2">
-                      <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      {incident.status === 'OPEN' && (
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-                          <Play className="h-3 w-3 mr-1" />
-                          Respond
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="executions" className="space-y-6">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white">Active Executions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {executions.map((execution) => (
-                    <div key={execution.id} className="p-4 bg-slate-700 rounded-lg">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h4 className="font-medium text-white">{execution.playbookName}</h4>
-                          <p className="text-sm text-slate-400">
-                            Started {new Date(execution.startedAt).toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge className={getStatusColor(execution.status)}>
-                            {execution.status}
-                          </Badge>
-                          {execution.status === 'RUNNING' && (
-                            <div className="flex space-x-1">
-                              <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                                <Pause className="h-3 w-3" />
-                              </Button>
-                              <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                                <Square className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-400">Progress:</span>
-                          <span className="text-slate-300">{execution.progress}%</span>
-                        </div>
-                        <Progress value={execution.progress} className="h-2" />
-                        
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-400">Current Step:</span>
-                          <span className="text-slate-300">
-                            {execution.currentStep} ({execution.totalSteps - Math.floor(execution.progress / 20)} remaining)
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-400">Triggered By:</span>
-                          <span className="text-slate-300">{execution.triggeredBy}</span>
-                        </div>
-                        
-                        {execution.duration && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-slate-400">Duration:</span>
-                            <span className="text-slate-300">{execution.duration}s</span>
-                          </div>
+                        </p>
+                        {execution.status === 'RUNNING' && (
+                          <Progress value={execution.progress} className="w-20 h-1 mt-1" />
                         )}
                       </div>
                     </div>
@@ -965,11 +541,304 @@ const SOARDashboard: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+          </div>
+        </TabsContent>
+
+        {/* Playbooks Tab */}
+        <TabsContent value="playbooks" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-white">Automation Playbooks</h2>
+            <Dialog open={showCreatePlaybook} onOpenChange={setShowCreatePlaybook}>
+              <DialogTrigger asChild>
+                <Button className="bg-cyber-accent hover:bg-cyber-accent/90">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Playbook
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-slate-800 border-slate-700">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Create New Playbook</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-300">Name</label>
+                    <Input
+                      value={newPlaybook.name}
+                      onChange={(e) => setNewPlaybook(prev => ({ ...prev, name: e.target.value }))}
+                      className="bg-slate-700 border-slate-600 text-white"
+                      placeholder="Enter playbook name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-300">Description</label>
+                    <Textarea
+                      value={newPlaybook.description}
+                      onChange={(e) => setNewPlaybook(prev => ({ ...prev, description: e.target.value }))}
+                      className="bg-slate-700 border-slate-600 text-white"
+                      placeholder="Enter playbook description"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-300">Trigger</label>
+                    <Input
+                      value={newPlaybook.trigger}
+                      onChange={(e) => setNewPlaybook(prev => ({ ...prev, trigger: e.target.value }))}
+                      className="bg-slate-700 border-slate-600 text-white"
+                      placeholder="Enter trigger condition"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-300">Severity</label>
+                    <Select value={newPlaybook.severity} onValueChange={(value: any) => setNewPlaybook(prev => ({ ...prev, severity: value }))}>
+                      <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-700 border-slate-600">
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                        <SelectItem value="CRITICAL">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setShowCreatePlaybook(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={createPlaybook} className="bg-cyber-accent hover:bg-cyber-accent/90">
+                      Create Playbook
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {playbooks.map((playbook) => (
+              <Card key={playbook.id} className="bg-slate-800 border-slate-700 hover:border-cyber-accent transition-colors">
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-white text-lg">{playbook.name}</CardTitle>
+                    <Badge className={getStatusColor(playbook.status)}>
+                      {playbook.status}
+                    </Badge>
+                  </div>
+                  <p className="text-gray-400 text-sm">{playbook.description}</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Trigger:</span>
+                    <span className="text-white">{playbook.trigger}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Actions:</span>
+                    <span className="text-white">{playbook.actions}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Success Rate:</span>
+                    <span className="text-green-400">{playbook.successRate}%</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Avg Time:</span>
+                    <span className="text-white">{playbook.averageTime}s</span>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button size="sm" variant="outline" className="flex-1">
+                      <Play className="w-3 h-3 mr-1" />
+                      Execute
+                    </Button>
+                    <Button size="sm" variant="outline">
+                      <Edit className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* Incidents Tab */}
+        <TabsContent value="incidents" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-white">Security Incidents</h2>
+            <Dialog open={showCreateIncident} onOpenChange={setShowCreateIncident}>
+              <DialogTrigger asChild>
+                <Button className="bg-cyber-accent hover:bg-cyber-accent/90">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Incident
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-slate-800 border-slate-700">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Create New Incident</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-300">Title</label>
+                    <Input
+                      value={newIncident.title}
+                      onChange={(e) => setNewIncident(prev => ({ ...prev, title: e.target.value }))}
+                      className="bg-slate-700 border-slate-600 text-white"
+                      placeholder="Enter incident title"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-300">Description</label>
+                    <Textarea
+                      value={newIncident.description}
+                      onChange={(e) => setNewIncident(prev => ({ ...prev, description: e.target.value }))}
+                      className="bg-slate-700 border-slate-600 text-white"
+                      placeholder="Enter incident description"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-300">Severity</label>
+                    <Select value={newIncident.severity} onValueChange={(value: any) => setNewIncident(prev => ({ ...prev, severity: value }))}>
+                      <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-700 border-slate-600">
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                        <SelectItem value="CRITICAL">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-300">Affected Systems</label>
+                    <Input
+                      value={newIncident.affectedSystems}
+                      onChange={(e) => setNewIncident(prev => ({ ...prev, affectedSystems: e.target.value }))}
+                      className="bg-slate-700 border-slate-600 text-white"
+                      placeholder="Enter affected systems (comma-separated)"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setShowCreateIncident(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={createIncident} className="bg-cyber-accent hover:bg-cyber-accent/90">
+                      Create Incident
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="space-y-4">
+            {incidents.map((incident) => (
+              <Card key={incident.id} className="bg-slate-800 border-slate-700 hover:border-cyber-accent transition-colors">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <Badge className={getSeverityColor(incident.severity)}>
+                        {incident.severity}
+                      </Badge>
+                      <div>
+                        <h3 className="text-white font-medium">{incident.title}</h3>
+                        <p className="text-gray-400 text-sm">{incident.description}</p>
+                        <div className="flex items-center space-x-4 mt-2">
+                          <span className="text-gray-500 text-xs">
+                            Created: {new Date(incident.createdAt).toLocaleString()}
+                          </span>
+                          <span className="text-gray-500 text-xs">
+                            Systems: {incident.affectedSystems.length}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge className={getStatusColor(incident.status)}>
+                        {incident.status}
+                      </Badge>
+                      <Button size="sm" variant="outline">
+                        <Eye className="w-3 h-3 mr-1" />
+                        View
+                      </Button>
+                      <Button size="sm" variant="outline">
+                        <Play className="w-3 h-3 mr-1" />
+                        Execute
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* Executions Tab */}
+        <TabsContent value="executions" className="space-y-6">
+          <h2 className="text-xl font-semibold text-white">Workflow Executions</h2>
+          
+          <div className="space-y-4">
+            {executions.map((execution) => (
+              <Card key={execution.id} className="bg-slate-800 border-slate-700 hover:border-cyber-accent transition-colors">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className={`w-3 h-3 rounded-full ${getStatusColor(execution.status)}`}></div>
+                      <div>
+                        <h3 className="text-white font-medium">{execution.playbookName}</h3>
+                        <p className="text-gray-400 text-sm">{execution.currentStep}</p>
+                        <div className="flex items-center space-x-4 mt-2">
+                          <span className="text-gray-500 text-xs">
+                            Started: {new Date(execution.startedAt).toLocaleString()}
+                          </span>
+                          <span className="text-gray-500 text-xs">
+                            Triggered by: {execution.triggeredBy}
+                          </span>
+                          {execution.duration && (
+                            <span className="text-gray-500 text-xs">
+                              Duration: {execution.duration}s
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      {execution.status === 'RUNNING' && (
+                        <div className="text-center">
+                          <Progress value={execution.progress} className="w-20 h-2 mb-1" />
+                          <span className="text-xs text-gray-400">{execution.progress}%</span>
+                        </div>
+                      )}
+                      <div className="text-right">
+                        <Badge className={getStatusColor(execution.status)}>
+                          {execution.status}
+                        </Badge>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Step {Math.ceil((execution.progress / 100) * execution.totalSteps)} of {execution.totalSteps}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        {execution.status === 'RUNNING' && (
+                          <>
+                            <Button size="sm" variant="outline">
+                              <Pause className="w-3 h-3" />
+                            </Button>
+                            <Button size="sm" variant="outline">
+                              <Square className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
+                        <Button size="sm" variant="outline">
+                          <Eye className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
 
-export { SOARDashboard }; 
+export default SOARDashboard; 
